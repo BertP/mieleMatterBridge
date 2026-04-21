@@ -32,6 +32,17 @@ esp_err_t ssd1306_clear(ssd1306_t *dev);
  */
 esp_err_t ssd1306_draw_string(ssd1306_t *dev, uint8_t x, uint8_t y, const char *str);
 
+/**
+ * @brief Zeichnet ein Bitmap (Direct Data)
+ */
+esp_err_t ssd1306_draw_bitmap(ssd1306_t *dev, uint8_t x, uint8_t y_page, uint8_t width, uint8_t height, const uint8_t *data);
+
+/**
+ * @brief Low-level Befehle (Nur für Fortgeschrittene)
+ */
+esp_err_t ssd1306_send_cmd(ssd1306_t *dev, uint8_t cmd);
+esp_err_t ssd1306_send_data(ssd1306_t *dev, const uint8_t *data, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

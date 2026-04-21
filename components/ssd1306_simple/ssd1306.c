@@ -71,12 +71,24 @@ static const uint8_t font8x8[][8] = {
 #define COMMAND_MODE 0x00
 #define DATA_MODE 0x40
 
-static esp_err_t send_cmd(ssd1306_t *dev, uint8_t cmd) {
+esp_err_t ssd1306_send_cmd(ssd1306_t *dev, uint8_t cmd) {
     i2c_cmd_handle_t link = i2c_cmd_link_create();
     i2c_master_start(link);
     i2c_master_write_byte(link, (dev->i2c_addr << 1) | I2C_MASTER_WRITE, true);
     i2c_master_write_byte(link, COMMAND_MODE, true);
     i2c_master_write_byte(link, cmd, true);
+    i2c_master_stop(link);
+    esp_err_t err = i2c_master_cmd_begin(dev->i2c_port, link, pdMS_TO_TICKS(100));
+    i2c_cmd_link_delete(link);
+    return err;
+}
+
+esp_err_t ssd1306_send_data(ssd1306_t *dev, const uint8_t *data, size_t len) {
+    i2c_cmd_handle_t link = i2c_cmd_link_create();
+    i2c_master_start(link);
+    i2c_master_write_byte(link, (dev->i2c_addr << 1) | I2C_MASTER_WRITE, true);
+    i2c_master_write_byte(link, DATA_MODE, true);
+    i2c_master_write(link, (uint8_t*)data, len, true);
     i2c_master_stop(link);
     esp_err_t err = i2c_master_cmd_begin(dev->i2c_port, link, pdMS_TO_TICKS(100));
     i2c_cmd_link_delete(link);
@@ -107,7 +119,7 @@ esp_err_t ssd1306_init(ssd1306_t *dev, i2c_port_t port, uint8_t addr) {
     };
 
     for(int i=0; i<sizeof(init_cmds); i++) {
-        send_cmd(dev, init_cmds[i]);
+        ssd1306_send_cmd(dev, init_cmds[i]);
     }
     
     return ESP_OK;
@@ -115,20 +127,12 @@ esp_err_t ssd1306_init(ssd1306_t *dev, i2c_port_t port, uint8_t addr) {
 
 esp_err_t ssd1306_clear(ssd1306_t *dev) {
     for (uint8_t i = 0; i < 8; i++) {
-        send_cmd(dev, 0xB0 + i);    // Set Page Address
-        send_cmd(dev, 0x00);        // Set Lower Column Address
-        send_cmd(dev, 0x10);        // Set Higher Column Address
+        ssd1306_send_cmd(dev, 0xB0 + i);    // Set Page Address
+        ssd1306_send_cmd(dev, 0x00);        // Set Lower Column Address
+        ssd1306_send_cmd(dev, 0x10);        // Set Higher Column Address
         
-        i2c_cmd_handle_t link = i2c_cmd_link_create();
-        i2c_master_start(link);
-        i2c_master_write_byte(link, (dev->i2c_addr << 1) | I2C_MASTER_WRITE, true);
-        i2c_master_write_byte(link, DATA_MODE, true);
-        for (uint8_t j = 0; j < 128; j++) {
-            i2c_master_write_byte(link, 0x00, true);
-        }
-        i2c_master_stop(link);
-        i2c_master_cmd_begin(dev->i2c_port, link, pdMS_TO_TICKS(100));
-        i2c_cmd_link_delete(link);
+        uint8_t clear_data[128] = {0};
+        ssd1306_send_data(dev, clear_data, 128);
     }
     return ESP_OK;
 }
@@ -136,24 +140,15 @@ esp_err_t ssd1306_clear(ssd1306_t *dev) {
 esp_err_t ssd1306_draw_string(ssd1306_t *dev, uint8_t x, uint8_t y, const char *str) {
     if (y > 7) return ESP_ERR_INVALID_ARG;
     
-    send_cmd(dev, 0xB0 + y);
-    send_cmd(dev, x & 0x0F);
-    send_cmd(dev, 0x10 | (x >> 4));
+    ssd1306_send_cmd(dev, 0xB0 + y);
+    ssd1306_send_cmd(dev, x & 0x0F);
+    ssd1306_send_cmd(dev, 0x10 | (x >> 4));
 
     for (int i = 0; i < strlen(str); i++) {
         uint8_t c = str[i];
         if (c < 0x20 || c > 0x7F) c = 0x20;
         
-        i2c_cmd_handle_t link = i2c_cmd_link_create();
-        i2c_master_start(link);
-        i2c_master_write_byte(link, (dev->i2c_addr << 1) | I2C_MASTER_WRITE, true);
-        i2c_master_write_byte(link, DATA_MODE, true);
-        for (int j = 0; j < 8; j++) {
-            i2c_master_write_byte(link, font8x8[c-0x20][j], true);
-        }
-        i2c_master_stop(link);
-        i2c_master_cmd_begin(dev->i2c_port, link, pdMS_TO_TICKS(100));
-        i2c_cmd_link_delete(link);
+        ssd1306_send_data(dev, font8x8[c-0x20], 8);
     }
     return ESP_OK;
 }
