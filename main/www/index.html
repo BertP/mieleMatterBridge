@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miele Matter Bridge | Onboarding</title>
+    <style>
+        :root {
+            --miele-red: #C60018;
+            --miele-black: #1A1A1A;
+            --bg-grad: linear-gradient(135deg, #1a1a1a 0%, #333333 100%);
+            --card-bg: rgba(255, 255, 255, 0.05);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-grad);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .logo-row {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .logo-row img {
+            height: 32px;
+            width: auto;
+        }
+
+        .logo-row .matter-logo {
+            height: 32px;
+        }
+
+        .logo-divider {
+            width: 1px;
+            height: 30px;
+            background: rgba(255,255,255,0.2);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 300;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+        }
+
+        p {
+            font-size: 15px;
+            color: #AAAAAA;
+            line-height: 1.6;
+            margin-bottom: 40px;
+        }
+
+        .btn {
+            display: block;
+            background: var(--miele-red);
+            color: white;
+            text-decoration: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s, background 0.2s;
+            box-shadow: 0 10px 20px rgba(198, 0, 24, 0.3);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+            background: #A00014;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #44FF44;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px #44FF44;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo-row">
+                <img src="/assets/miele.svg" alt="Miele">
+                <div class="logo-divider"></div>
+                <img src="/assets/matter.svg" alt="Matter" class="matter-logo">
+            </div>
+
+            <h1>Bereit für Matter</h1>
+            <p>Verknüpfen Sie Ihren Miele Account, um Ihren Geschirrspüler und weitere Geräte nahtlos über Matter zu steuern.</p>
+            
+            <a href="/login" class="btn">Miele Account verbinden</a>
+
+            <div class="footer">
+                <span class="status-dot"></span> Bridge Online | PoC v0.3
+            </div>
+        </div>
+    </div>
+</body>
+</html>
