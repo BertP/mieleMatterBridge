@@ -1,0 +1,33 @@
+name: ESP32-S3 Firmware Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+
+    - name: esp-idf build
+      uses: espressif/idf-build-action@v1.5.0
+      with:
+        esp_idf_version: v5.1.2
+        target: esp32s3
+        path: '.'
+
+    - name: Upload Binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: firmware-binaries
+        path: |
+          build/*.bin
+          build/partition_table/partition-table.bin
+          sdkconfig

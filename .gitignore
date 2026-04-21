@@ -1,0 +1,38 @@
+# ESP-IDF specific
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# Matter specific
+connectedhomeip/
+zzz_generated/
+
+# Python environment
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.pdm-python
+*.pdm-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+.env
+credentials.json
+nvs_batch.csv

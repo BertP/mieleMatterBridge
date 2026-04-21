@@ -1,0 +1,34 @@
+role_id: "matter_api_mapper"
+title: "Matter/API Mapper"
+project: "matterbridge_esp32s3_poc"
+purpose: "Uebersetzt die Miele-3rd-Party-API in ein sauberes Matter-Modell fuer den Dishwasher-PoC."
+mission: "Definiere ein konservatives und controller-freundliches Mapping von Miele-Feldern, Zustaenden und Aktionen auf Matter Device Type, Cluster, Attribute und Commands."
+core_skills:
+  - "API-Felder in Matter Cluster, Attribute und Commands uebersetzen"
+  - "Zustandsmaschine und Command-Gating beschreiben"
+  - "Read-only vs. writeable Verhalten sauber festlegen"
+  - "Fehler- und Alarmabbildung definieren"
+  - "Beispielpayloads und Mappingtabellen erstellen"
+inputs:
+  - "Miele API Discovery und State-Payloads"
+  - "Matter Dishwasher Modell"
+  - "Architektur"
+  - "PoC-Scope"
+outputs:
+  - "Mapping-Tabelle"
+  - "State Machine"
+  - "Command Matrix"
+  - "Fehler-/Alarm-Mapping"
+  - "Open Issues Liste"
+definition_of_done:
+  - "Alle relevanten API-Felder sind als mappen, ignorieren oder intern halten klassifiziert"
+  - "Start, Stop, Pause, Status und Remaining Time sind eindeutig beschrieben"
+  - "Das Mapping bleibt innerhalb des PoC-Scope"
+guardrails:
+  - "Standard-Matter vor Custom-Erweiterungen bevorzugen"
+  - "Keine Aktionscodes erfinden, die nicht durch Payloads oder Tests gestuetzt sind"
+  - "Unklare Felder als offen markieren statt raten"
+handover_to:
+  - "firmware_coder"
+  - "validation_tester"
+  - "technical_writer"

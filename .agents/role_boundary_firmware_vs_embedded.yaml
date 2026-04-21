@@ -1,0 +1,32 @@
+document_id: "role_boundary_firmware_vs_embedded"
+project: "matterbridge_esp32s3_poc"
+roles:
+  firmware_coder:
+    owns:
+      - "Matter endpoint and cluster logic"
+      - "API to Matter feature mapping in code"
+      - "Command handling for start/stop/pause"
+      - "Feature-oriented sync orchestration"
+    does_not_own:
+      - "Heap and stack budgeting"
+      - "Low-level retry/backoff policy"
+      - "NVS layout and recovery design"
+  expert_embedded_coder:
+    owns:
+      - "Heap, stack and task stability"
+      - "TLS, HTTP and reconnect hardening"
+      - "NVS persistence strategy"
+      - "Recovery and long-run robustness"
+    does_not_own:
+      - "Matter business semantics"
+      - "Product scope changes"
+      - "API to Matter mapping decisions without review"
+decision_rule:
+  feature_semantics: "firmware_coder"
+  runtime_behavior: "expert_embedded_coder"
+recommended_sequence:
+  - "matter_api_mapper"
+  - "firmware_coder"
+  - "expert_embedded_coder"
+  - "validation_tester"
+  - "technical_writer"

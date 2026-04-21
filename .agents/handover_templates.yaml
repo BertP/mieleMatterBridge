@@ -1,0 +1,98 @@
+schema_version: "1.0"
+project: "matterbridge_esp32s3_poc"
+required_fields_for_all_handovers:
+  - "source_role"
+  - "target_role"
+  - "handover_title"
+  - "goal"
+  - "scope"
+  - "non_goals_for_this_slice"
+  - "reference_artifacts_v_num"
+  - "inputs"
+  - "artifacts"
+  - "constraints"
+  - "open_questions"
+  - "acceptance_criteria"
+  - "risks"
+  - "next_action"
+templates:
+  -
+    name: "architect_to_mapper"
+    source_role: "system_architect"
+    target_role: "matter_api_mapper"
+    goal: "Translate approved system scope into a conservative Matter mapping."
+    must_include:
+      - "Approved device type and endpoint model"
+      - "Scope and non-goals"
+      - "Assumptions about cloud connectivity and command model"
+      - "Constraints from ESP32-S3 resources"
+  -
+    name: "mapper_to_firmware_coder"
+    source_role: "matter_api_mapper"
+    target_role: "firmware_coder"
+    goal: "Implement the mapping in firmware without reinterpreting semantics."
+    must_include:
+      - "State mapping table"
+      - "Command matrix"
+      - "Writable vs read-only list"
+      - "Explicit open issues and unsupported cases"
+  -
+    name: "planner_to_implementation"
+    source_role: "delivery_planner"
+    target_role: "firmware_coder"
+    goal: "Start a small vertical implementation slice."
+    must_include:
+      - "Task scope"
+      - "Input artifacts"
+      - "Definition of done"
+      - "Blocked-by and hands-back conditions"
+  -
+    name: "firmware_to_embedded"
+    source_role: "firmware_coder"
+    target_role: "expert_embedded_coder"
+    goal: "Harden a functionally correct increment for MCU reality."
+    must_include:
+      - "Changed files"
+      - "Observed payload sizes and polling rate"
+      - "Known weak points"
+      - "Desired runtime guarantees"
+  -
+    name: "embedded_to_tester"
+    source_role: "expert_embedded_coder"
+    target_role: "validation_tester"
+    goal: "Validate runtime stability and failure handling of the hardened build."
+    must_include:
+      - "Runtime constraints"
+      - "Expected behavior under stress or reconnect"
+      - "Known risk areas"
+      - "Suggested edge-case tests"
+  -
+    name: "tester_to_coders"
+    source_role: "validation_tester"
+    target_role: "firmware_coder"
+    goal: "Return reproducible defects and scope-status to implementation roles."
+    must_include:
+      - "Reproduction steps"
+      - "Expected versus actual behavior"
+      - "Logs or evidence"
+      - "Severity and scope impact"
+  -
+    name: "any_to_technical_writer"
+    source_role: "any"
+    target_role: "technical_writer"
+    goal: "Update documentation based on approved project changes."
+    must_include:
+      - "What changed"
+      - "Why it changed"
+      - "Files or modules affected"
+      - "New constraints, risks or open questions"
+  -
+    name: "technical_escalation_to_architect"
+    source_role: "any"
+    target_role: "system_architect"
+    goal: "Request an architecture decision (ADR) due to technical blockers or scope mismatch."
+    must_include:
+      - "Problem description"
+      - "Observed constraint or blocker"
+      - "Suggested alternatives or trade-offs"
+      - "Impact on current timeline/scope"

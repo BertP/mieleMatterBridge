@@ -1,0 +1,154 @@
+{
+  "project": "matterbridge_esp32s3_poc",
+  "version": "4.0",
+  "generated_files": [
+    "AGENT_SKILLS_UEBERSICHT_DE.md",
+    "ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md",
+    "build_tooling_steward.md",
+    "build_tooling_steward.yaml",
+    "delivery_planner.md",
+    "delivery_planner.yaml",
+    "expert_embedded_coder.md",
+    "expert_embedded_coder.yaml",
+    "firmware_coder.md",
+    "firmware_coder.yaml",
+    "handover_templates.yaml",
+    "matter_api_mapper.md",
+    "matter_api_mapper.yaml",
+    "role_boundary_firmware_vs_embedded.yaml",
+    "system_architect.md",
+    "system_architect.yaml",
+    "technical_writer.md",
+    "technical_writer.yaml",
+    "validation_tester.md",
+    "validation_tester.yaml"
+  ],
+  "recommended_sequence": [
+    "system_architect",
+    "matter_api_mapper",
+    "delivery_planner",
+    "firmware_coder",
+    "expert_embedded_coder",
+    "validation_tester",
+    "technical_writer"
+  ],
+  "cross_cutting_roles": [
+    "build_tooling_steward"
+  ],
+  "agents": [
+    {
+      "role_id": "system_architect",
+      "title": "System Architect",
+      "purpose": "Definiert die Zielarchitektur des MatterBridge-PoC auf dem ESP32-S3-N8R2 und hält den Scope technisch sauber.",
+      "files": {
+        "markdown": "system_architect.md",
+        "yaml": "system_architect.yaml"
+      },
+      "handover_to": [
+        "delivery_planner",
+        "matter_api_mapper",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "delivery_planner",
+      "title": "Delivery Planner",
+      "purpose": "Zerlegt Architektur und Mapping in kleine, testbare und geordnete Arbeitspakete fuer ein agentisches Umsetzungssystem.",
+      "files": {
+        "markdown": "delivery_planner.md",
+        "yaml": "delivery_planner.yaml"
+      },
+      "handover_to": [
+        "firmware_coder",
+        "expert_embedded_coder",
+        "validation_tester",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "matter_api_mapper",
+      "title": "Matter/API Mapper",
+      "purpose": "Uebersetzt die Miele-3rd-Party-API in ein sauberes Matter-Modell fuer den Dishwasher-PoC.",
+      "files": {
+        "markdown": "matter_api_mapper.md",
+        "yaml": "matter_api_mapper.yaml"
+      },
+      "handover_to": [
+        "firmware_coder",
+        "validation_tester",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "firmware_coder",
+      "title": "Firmware Coder",
+      "purpose": "Implementiert die fachliche Firmware-Funktion des MatterBridge-PoC mit ESP-IDF und ESP-Matter.",
+      "files": {
+        "markdown": "firmware_coder.md",
+        "yaml": "firmware_coder.yaml"
+      },
+      "handover_to": [
+        "expert_embedded_coder",
+        "validation_tester",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "expert_embedded_coder",
+      "title": "Expert Embedded Coder",
+      "purpose": "Haertet die Firmware fuer den echten MCU-Betrieb auf dem ESP32-S3-N8R2.",
+      "files": {
+        "markdown": "expert_embedded_coder.md",
+        "yaml": "expert_embedded_coder.yaml"
+      },
+      "handover_to": [
+        "validation_tester",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "validation_tester",
+      "title": "Validation Tester",
+      "purpose": "Prueft Funktion, Robustheit und Scope-Treue des PoC mit reproduzierbaren Tests.",
+      "files": {
+        "markdown": "validation_tester.md",
+        "yaml": "validation_tester.yaml"
+      },
+      "handover_to": [
+        "firmware_coder",
+        "expert_embedded_coder",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "build_tooling_steward",
+      "title": "Build & Tooling Steward",
+      "purpose": "Sichert reproduzierbare Builds, Toolchain-Konsistenz, CI und einheitliche Artefakte.",
+      "files": {
+        "markdown": "build_tooling_steward.md",
+        "yaml": "build_tooling_steward.yaml"
+      },
+      "handover_to": [
+        "firmware_coder",
+        "expert_embedded_coder",
+        "technical_writer"
+      ]
+    },
+    {
+      "role_id": "technical_writer",
+      "title": "Technischer Redakteur",
+      "purpose": "Haelt Projektdokumente fachlich aktuell, strukturell konsistent und professionell lesbar.",
+      "files": {
+        "markdown": "technical_writer.md",
+        "yaml": "technical_writer.yaml"
+      },
+      "handover_to": []
+    }
+  ],
+  "supporting_documents": {
+    "overview": "AGENT_SKILLS_UEBERSICHT_DE.md",
+    "handover_templates": "handover_templates.yaml",
+    "role_boundary_markdown": "ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md",
+    "role_boundary_yaml": "role_boundary_firmware_vs_embedded.yaml"
+  }
+}
