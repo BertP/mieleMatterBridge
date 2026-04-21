@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.cpp"
+idf_component_register(SRCS "main.cpp" "miele_matter_mapping.cpp"
                     INCLUDE_DIRS "."
                     PRIV_INCLUDE_DIRS "." 
                                       "${ESP_MATTER_PATH}/examples/common/utils"
