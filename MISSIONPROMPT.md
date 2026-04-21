@@ -22,8 +22,8 @@ Der PoC soll zeigen, dass ein Miele-Geschirrspüler via Cloud/API sinnvoll in ei
 6. Nutze **Espressif ESP-Matter** auf einer stabil gepinnten ESP-IDF-Version.
 7. Implementiere eine **statische Dishwasher-Abbildung** statt eines generischen Light/Switch-Workarounds.
 8. Zugangsdaten dürfen **niemals hartcodiert** im Quelltext liegen.
-9. Der Code muss so strukturiert sein, dass ein späterer Umstieg auf mehrere Appliances möglich bleibt.
-10. Schreibe alle Annahmen, Unsicherheiten und offenen Punkte explizit in die Doku.
+9. Die Architektur folgt dem **Matter Aggregator Pattern**. Die Bridge selbst liegt auf Endpoint 0, jede Appliance auf einem eigenen dynamischen Endpoint.
+10. Der Code muss strikt zwischen Bridge-Infrastruktur und Appliance-Logik trennen, um später weitere Gerätetypen (Waschmaschinen, Trockner, etc.) ohne Refactoring der Kernlogik hinzufügen zu können.
 
 ## Technische Leitentscheidung
 
@@ -71,8 +71,8 @@ als:
 ### Muss
 
 - Commissioning in ein Matter-Netz
-- ein sichtbarer Matter-Knoten für die Bridge
-- ein sichtbarer Dishwasher-Endpoint
+- Ein funktionaler Matter-Knoten vom Typ **Aggregator**
+- Ein sichtbarer **Bridged Device** Endpoint für den ersten Geschirrspüler
 - Abbildung von:
   - Gerätestatus
   - aktuellem Programm / Modus
@@ -95,6 +95,7 @@ als:
 - simuliertes Backend oder Mock-Layer
 - Trennung zwischen Produktiv-API und Fake-API
 - einfacher Health-Status
+- OLED-Statusanzeige (QR-Code, IP-Adresse, SSID) für Headless-Betrieb
 
 ### Nicht Ziel im ersten Wurf
 

@@ -21,9 +21,9 @@
 
 ## Ergebnisse
 - Systemkontextdiagramm
-- Komponenten- und Schnittstellenbeschreibung
+- Komponenten- und Schnittstellenbeschreibung (inkl. OLED-Statusanzeige)
 - Architekturentscheidungen
-- Scope-/Non-Goal-Liste
+- Scope-/Non-Goal-Liste (inkl. QR-Code Display-Strategie)
 - Risiko- und Annahmenliste
 
 ## Definition of Done

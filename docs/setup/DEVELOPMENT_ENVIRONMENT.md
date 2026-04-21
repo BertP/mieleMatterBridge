@@ -22,6 +22,7 @@ sudo apt install --no-install-recommends git wget flex bison gperf python3 pytho
 ```
 
 ### Install ESP-IDF (Pinned Version v5.1.2)
+*Note: The project was validated using v5.4.0 in this environment.*
 ```bash
 mkdir -p ~/esp
 cd ~/esp
@@ -45,24 +46,36 @@ source ./export.sh
 To connect the ESP32-S3 to WSL2:
 1. Open PowerShell on Windows as Administrator.
 2. List devices: `usbipd list`
-3. Bind your ESP32-S3 (once): `usbipd bind --busid <BUSID>`
-4. Attach to WSL2: `usbipd attach --wsl --busid <BUSID>`
-5. In WSL2, the device should now appear as `/dev/ttyACM0` or `/dev/ttyUSB0`.
+3. Bind your ESP32-S3 (once): `usbipd bind --busid 3-2`
+4. Attach with Auto-Reattach (Important): `usbipd attach --wsl --busid 3-2 --auto-attach`
+5. In WSL2, the device appears as `/dev/ttyACM0`.
 
-## 4. Connectivity Check (Smoke Test)
+## 4. Connectivity Check (Validated)
 
 Run the following inside WSL2 after sourcing `export.sh`:
 ```bash
 idf.py --version
-# Should output: ESP-IDF v5.1.2
+# Output: ESP-IDF v5.4.0
 ```
 
-## 5. Build Smoke Test
+## 5. Build & Flash Workflow (Validated)
 
-To verify Matter build capability:
+### Hardware Identification
+- **Board:** ESP32-S3-N8R2 (8MB Flash, 2MB Embedded PSRAM)
+- **Windows Port:** `COM7`
+- **WSL2 Port:** `/dev/ttyACM0`
+- **RGB LED (WS2812):** GPIO 48
+
+### Initial Provisioning (PowerShell Admin)
+```powershell
+usbipd attach --wsl --busid 3-2 --auto-attach
+```
+
+### Development Cycle (WSL2)
 ```bash
-cd ~/esp/esp-matter/examples/light
-idf.py set-target esp32s3
+# Build
 idf.py build
+
+# Flash & Monitor
+idf.py -p /dev/ttyACM0 flash monitor
 ```
-This build consumes significant resources and tests the entire toolchain (GN/Ninja/Project CHIP).

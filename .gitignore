@@ -35,4 +35,10 @@ Thumbs.db
 *.key
 .env
 credentials.json
+credentials.txt
+docs/miele3rdpartyapi/credentials.txt
 nvs_batch.csv
+
+# Logs
+*.log
+build_log_*
