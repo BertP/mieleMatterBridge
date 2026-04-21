@@ -9,17 +9,22 @@
 // Headers for specific devices
 #include <dish_washer_device.h>
 #include <aggregator_device.h>
+#include <app/server/Server.h>
 
 // Miele API Client
 #include "miele_client.h"
 #include "esp_http_server.h"
 #include "mdns.h"
+#include "cJSON.h"
 
 #include "ssd1306.h"
 #include "driver/i2c.h"
+#include "miele_matter_mapping.h"
+#include "esp_wifi.h"
 
 static const char *TAG = "MIELE_BRIDGE";
 static ssd1306_t oled_dev;
+static uint16_t dishwasher_endpoint_id = 0;
 
 // Marker for embedded assets
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
@@ -35,6 +40,91 @@ using namespace esp_matter::endpoint;
 // Credentials (aus docs/miele3rdpartyapi/credentials.txt)
 #define MIELE_CLIENT_ID "0df585cb-2ac3-4bb0-8dd7-5fafe9e392fe"
 #define MIELE_CLIENT_SECRET "60reBsf93NOCiPQiRS1Qxh04skNpoely"
+
+// QR-Code Matrix (25x25) - 1 = Schwarz, 0 = Weiß
+const int QR_SIZE = 25;
+const uint8_t qr_matrix[25][25] = {
+    {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1},
+    {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1},
+    {1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1},
+    {1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1},
+    {1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0},
+    {0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
+    {0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0},
+    {1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1},
+    {0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0},
+    {0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1},
+    {1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0},
+    {0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1},
+    {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1},
+    {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1},
+    {1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
+    {1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0},
+    {1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1},
+    {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+};
+
+static bool is_commissioned = false;
+
+static void draw_qr_code() {
+    uint8_t x_offset = 39; // Zentriert: (128 - 50) / 2
+    
+    // QR Code zeichnen (2x2 Skalierung)
+    // Wir nutzen Page 1 bis 7 (Page 0 ist für den Titel)
+    for (int p = 1; p <= 7; p++) {
+        ssd1306_send_cmd(&oled_dev, 0xB0 + p);
+        ssd1306_send_cmd(&oled_dev, x_offset & 0x0F);
+        ssd1306_send_cmd(&oled_dev, 0x10 | (x_offset >> 4));
+        
+        uint8_t page_data[50];
+        for (int module_x = 0; module_x < 25; module_x++) {
+            uint8_t byte = 0;
+            int r_start = (p - 1) * 4;
+            for (int i = 0; i < 4; i++) {
+                int r = r_start + i;
+                if (r < 25 && qr_matrix[r][module_x]) {
+                    byte |= (0x03 << (i * 2));
+                }
+            }
+            page_data[module_x * 2] = byte;
+            page_data[module_x * 2 + 1] = byte;
+        }
+        ssd1306_send_data(&oled_dev, page_data, 50);
+    }
+}
+
+/**
+ * @brief Geballte Matter-Events (Pairing-Status etc.)
+ */
+static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg) {
+    switch (event->Type) {
+        case chip::DeviceLayer::DeviceEventType::kInterfaceIpAddressChanged: {
+            ESP_LOGI(TAG, "IP-Adresse erhalten oder geändert.");
+            // Wir versuchen die IP aufs OLED zu bringen, damit du siehst dass er im WLAN ist!
+            ssd1306_draw_string(&oled_dev, 0, 7, "IP: CONNECTING.. ");
+            break;
+        }
+        case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
+            ESP_LOGI(TAG, "Pairing erfolgreich abgeschlossen! 🎉");
+            is_commissioned = true;
+            ssd1306_clear(&oled_dev);
+            ssd1306_draw_string(&oled_dev, 0, 0, "MIELE BRIDGE   ");
+            ssd1306_draw_string(&oled_dev, 0, 7, "MATTER: OK      ");
+            break;
+        case chip::DeviceLayer::DeviceEventType::kFailSafeTimerExpired:
+            ESP_LOGW(TAG, "Fail-safe Timer abgelaufen!");
+            break;
+        default:
+            break;
+    }
+}
 
 /**
  * @brief GET / Handler: Serviert die Onboarding Seite
@@ -144,14 +234,67 @@ static void miele_sync_task(void *pvParameters) {
     ESP_LOGI(TAG, "Miele Sync Task gestartet.");
     
     while (1) {
+        if (!is_commissioned) {
+            draw_qr_code();
+            vTaskDelay(pdMS_TO_TICKS(10000));
+            continue;
+        }
+
         if (miele::api::is_authenticated()) {
             ssd1306_draw_string(&oled_dev, 0, 2, "CLOUD: OK   ");
             ESP_LOGI(TAG, "Sync: Frage Miele Ger&auml;teliste ab...");
             std::string response;
             if (miele::api::get_devices(response) == ESP_OK) {
                 ESP_LOGI(TAG, "Miele Cloud Discovery: %s", response.c_str());
-                ssd1306_draw_string(&oled_dev, 0, 4, "SYNC: DONE  ");
-                // Später: Antwort parsen und Matter-Endpoints aktualisieren
+                
+                // Antwort parsen und gezielt den Geschirrspüler suchen
+                cJSON* root = cJSON_Parse(response.c_str());
+                if (root) {
+                    cJSON* device = NULL;
+                    cJSON* target_dishwasher = NULL;
+                    
+                    // Iteriere durch alle Fabriknummern (Keys)
+                    cJSON_ArrayForEach(device, root) {
+                        cJSON* ident = cJSON_GetObjectItem(device, "ident");
+                        if (ident) {
+                            cJSON* type = cJSON_GetObjectItem(ident, "type");
+                            if (type && cJSON_GetObjectItem(type, "value_raw")->valueint == 7) {
+                                target_dishwasher = device;
+                                break; 
+                            }
+                        }
+                    }
+
+                    if (target_dishwasher) {
+                        miele::mapping::update_dishwasher_attributes(dishwasher_endpoint_id, target_dishwasher);
+                        
+                        // OLED Live-Update
+                        cJSON* state = cJSON_GetObjectItem(target_dishwasher, "state");
+                        if (state) {
+                            cJSON* status = cJSON_GetObjectItem(state, "status");
+                            cJSON* rem = cJSON_GetObjectItem(state, "remainingTime");
+                            if (status && rem) {
+                                char buf[17];
+                                // Status mit Padding zum Löschen alter Reste
+                                snprintf(buf, sizeof(buf), "STA: %-11s", cJSON_GetObjectItem(status, "value_localized")->valuestring);
+                                ssd1306_draw_string(&oled_dev, 0, 4, buf);
+                                
+                                snprintf(buf, sizeof(buf), "REM: %02d:%02d      ", 
+                                        cJSON_GetArrayItem(rem, 0)->valueint,
+                                        cJSON_GetArrayItem(rem, 1)->valueint);
+                                ssd1306_draw_string(&oled_dev, 0, 5, buf);
+                                
+                                // Pairing Info am unteren Rand (FIXED PIN)
+                                ssd1306_draw_string(&oled_dev, 0, 7, "PIN: 12345678   ");
+                            }
+                        }
+                    } else {
+                        ESP_LOGW(TAG, "Kein Geschirrspüler in der Cloud-Liste gefunden!");
+                        ssd1306_draw_string(&oled_dev, 0, 4, "G7310 NOT FOUND");
+                    }
+                    cJSON_Delete(root);
+                }
+                ssd1306_draw_string(&oled_dev, 0, 7, "SYNC: DONE    ");
             } else {
                 ESP_LOGE(TAG, "Sync: Fehler beim Abrufen der Ger&auml;teliste.");
                 ssd1306_draw_string(&oled_dev, 0, 4, "SYNC: ERROR ");
@@ -224,38 +367,63 @@ extern "C" void app_main()
     ssd1306_draw_string(&oled_dev, 0, 0, "MIELE BRIDGE");
     ssd1306_draw_string(&oled_dev, 0, 2, "BOOTING...");
 
-    /* 1. Basis-Infrastruktur (TCP/IP, NVS, Events) */
+    /* 1. Basis-Infrastruktur */
+    ssd1306_draw_string(&oled_dev, 0, 2, "INIT NET...     ");
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    
+    // WLAN Power Save deaktivieren für maximale Pairing-Stabilität
+    esp_wifi_set_ps(WIFI_PS_NONE);
 
-    ESP_LOGI(TAG, "Miele Matter Bridge PoC startet (V0.5.5)...");
-
-    /* 2. Miele API Client Setup */
+    ssd1306_draw_string(&oled_dev, 0, 2, "INIT MIELE API..");
     miele::api::config_t miele_config;
     miele_config.client_id = MIELE_CLIENT_ID;
     miele_config.client_secret = MIELE_CLIENT_SECRET;
     miele::api::init(miele_config);
 
-    /* 3. Matter Node Konfiguration */
+    ssd1306_draw_string(&oled_dev, 0, 2, "CREATE NODE...  ");
     node::config_t node_config;
     node_t *node = node::create(&node_config, NULL, NULL);
 
-    /* 4. Endpoints */
+    ssd1306_draw_string(&oled_dev, 0, 2, "CREATE ENDP...  ");
     aggregator::config_t aggregator_config;
     endpoint_t *aggregator_endpoint = aggregator::create(node, &aggregator_config, ENDPOINT_FLAG_NONE, NULL);
+    (void)aggregator_endpoint; // Unused for now
     
     dish_washer::config_t dishwasher_config;
     endpoint_t *dishwasher_endpoint = dish_washer::create(node, &dishwasher_config, ENDPOINT_FLAG_NONE, NULL);
+    dishwasher_endpoint_id = endpoint::get_id(dishwasher_endpoint);
+    (void)dishwasher_endpoint;
 
-    /* 5. Onboarding Webserver & mDNS (Nachdem Netstack bereit ist) */
+    /* 5. Onboarding Webserver & mDNS */
+    ssd1306_draw_string(&oled_dev, 0, 2, "NET CONFIG...   ");
     mdns_init();
     mdns_hostname_set("miele-bridge");
     start_webserver();
 
-    /* 6. Matter Stack starten */
-    err = esp_matter::start(NULL);
+    /* 7. Start Matter Stack & Console */
+    ssd1306_draw_string(&oled_dev, 0, 2, "MATTER START... ");
+    
+    err = esp_matter::start(app_event_cb);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Matter Stack Start fehlgeschlagen!");
+        ssd1306_draw_string(&oled_dev, 0, 2, "MATTER ERROR!   ");
+    } else {
+        esp_matter::console::init(); // Konsole für Befehle aktivieren
+        is_commissioned = chip::DeviceLayer::ConfigurationMgr().IsFullyProvisioned();
+        
+        if (!is_commissioned) {
+            ssd1306_clear(&oled_dev);
+            draw_qr_code();
+            
+            ESP_LOGI(TAG, "==============================================");
+            ESP_LOGI(TAG, "   MATTER IDENTITY FORCED BY CONFIG: ");
+            ESP_LOGI(TAG, "   PIN: 12345678");
+            ESP_LOGI(TAG, "   DISCRIMINATOR: 1234");
+            ESP_LOGI(TAG, "==============================================");
+            
+            // Jetzt lassen wir den Stack die offizielle Wahrheit sprechen:
+            chip::DeviceLayer::ConfigurationMgr().LogDeviceConfig();
+        }
     }
 
     /* 8. Miele Sync Task starten */

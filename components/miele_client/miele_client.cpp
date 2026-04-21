@@ -29,17 +29,28 @@ static esp_err_t load_tokens_from_nvs() {
     nvs_handle_t handle;
     esp_err_t err = nvs_open("miele_api", NVS_READONLY, &handle);
     if (err == ESP_OK) {
-        char buf[1024];
         size_t required_size;
         
+        // 1. Access Token
         if (nvs_get_str(handle, "access_token", NULL, &required_size) == ESP_OK) {
-            nvs_get_str(handle, "access_token", buf, &required_size);
-            s_config.access_token = buf;
+            char* buf = (char*)malloc(required_size);
+            if (buf) {
+                nvs_get_str(handle, "access_token", buf, &required_size);
+                s_config.access_token = buf;
+                free(buf);
+            }
         }
+
+        // 2. Refresh Token
         if (nvs_get_str(handle, "refresh_token", NULL, &required_size) == ESP_OK) {
-            nvs_get_str(handle, "refresh_token", buf, &required_size);
-            s_config.refresh_token = buf;
+            char* buf = (char*)malloc(required_size);
+            if (buf) {
+                nvs_get_str(handle, "refresh_token", buf, &required_size);
+                s_config.refresh_token = buf;
+                free(buf);
+            }
         }
+        
         nvs_close(handle);
         if (!s_config.access_token.empty()) {
             ESP_LOGI(TAG, "Tokens erfolgreich aus NVS geladen.");
@@ -83,8 +94,8 @@ static esp_err_t perform_request(const char *url, esp_http_client_method_t metho
     config.url = url;
     config.method = method;
     config.timeout_ms = 20000;
-    config.buffer_size = 4096;
-    config.buffer_size_tx = 4096;
+    config.buffer_size = 8192;
+    config.buffer_size_tx = 8192;
     config.event_handler = _http_event_handler;
     config.user_data = &out_response;
     config.crt_bundle_attach = esp_crt_bundle_attach;
