@@ -96,3 +96,43 @@ templates:
       - "Observed constraint or blocker"
       - "Suggested alternatives or trade-offs"
       - "Impact on current timeline/scope"
+  -
+    name: "firmware_to_commissioning"
+    source_role: "firmware_coder"
+    target_role: "matter_commissioning_forensics"
+    goal: "Diagnose why a build that should commission still fails during onboarding or discovery."
+    must_include:
+      - "Build identifier and changed files"
+      - "Pairing method used and commissioner name"
+      - "Observed BLE, Wi-Fi and mDNS symptoms"
+      - "Relevant serial log excerpt and onboarding payload"
+  -
+    name: "embedded_to_commissioning"
+    source_role: "expert_embedded_coder"
+    target_role: "matter_commissioning_forensics"
+    goal: "Correlate runtime, timing or memory behavior with commissioning failures."
+    must_include:
+      - "Task and timing changes"
+      - "Heap or stack observations"
+      - "Network or TLS constraints"
+      - "Known boot or reconnect anomalies"
+  -
+    name: "commissioning_to_tester"
+    source_role: "matter_commissioning_forensics"
+    target_role: "validation_tester"
+    goal: "Turn a diagnosed onboarding path into reproducible validation steps."
+    must_include:
+      - "Known-good pairing flow"
+      - "Required commissioner and environment"
+      - "Expected logs or milestones"
+      - "Recovery steps for failed re-runs"
+  -
+    name: "commissioning_to_writer"
+    source_role: "matter_commissioning_forensics"
+    target_role: "technical_writer"
+    goal: "Document validated onboarding behavior, pitfalls and recovery procedures."
+    must_include:
+      - "Commissioning prerequisites"
+      - "Tested pairing commands or app steps"
+      - "Known failure signatures"
+      - "Recovery and factory-reset notes"

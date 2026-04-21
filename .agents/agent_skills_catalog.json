@@ -1,8 +1,9 @@
 {
   "project": "matterbridge_esp32s3_poc",
-  "version": "4.0",
+  "version": "5.0",
   "generated_files": [
     "AGENT_SKILLS_UEBERSICHT_DE.md",
+    "ONBOARDING_SPECIALIST_INTEGRATION_DE.md",
     "ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md",
     "build_tooling_steward.md",
     "build_tooling_steward.yaml",
@@ -18,6 +19,8 @@
     "role_boundary_firmware_vs_embedded.yaml",
     "system_architect.md",
     "system_architect.yaml",
+    "matter_commissioning_forensics.md",
+    "matter_commissioning_forensics.yaml",
     "technical_writer.md",
     "technical_writer.yaml",
     "validation_tester.md",
@@ -29,6 +32,7 @@
     "delivery_planner",
     "firmware_coder",
     "expert_embedded_coder",
+    "matter_commissioning_forensics",
     "validation_tester",
     "technical_writer"
   ],
@@ -132,6 +136,22 @@
         "firmware_coder",
         "expert_embedded_coder",
         "technical_writer"
+      ]
+    },
+    {
+      "role_id": "matter_commissioning_forensics",
+      "title": "Matter Commissioning Forensics",
+      "purpose": "Analysiert und behebt Onboarding-, Commissioning- und Interoperabilitaetsprobleme bei Matter-Geraeten auf ESP32-S3.",
+      "files": {
+        "markdown": "matter_commissioning_forensics.md",
+        "yaml": "matter_commissioning_forensics.yaml"
+      },
+      "handover_to": [
+        "firmware_coder",
+        "expert_embedded_coder",
+        "validation_tester",
+        "technical_writer",
+        "system_architect"
       ]
     },
     {

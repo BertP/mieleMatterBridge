@@ -12,6 +12,7 @@ Dieser Ordner beschreibt die Agentenrollen fuer die Entwicklung einer MatterBrid
 - `validation_tester` - Validation Tester: Prueft Funktion, Robustheit und Scope-Treue des PoC mit reproduzierbaren Tests.
 - `build_tooling_steward` - Build & Tooling Steward: Sichert reproduzierbare Builds, Toolchain-Konsistenz, CI und einheitliche Artefakte.
 - `technical_writer` - Technischer Redakteur: Haelt Projektdokumente fachlich aktuell, strukturell konsistent und professionell lesbar.
+- `matter_commissioning_forensics` - Matter Commissioning Forensics: Analysiert und behebt Onboarding-, Commissioning- und Interoperabilitaetsprobleme bei Matter-Geraeten auf ESP32-S3.
 
 ## Weitere Dateien
 
@@ -19,6 +20,7 @@ Dieser Ordner beschreibt die Agentenrollen fuer die Entwicklung einer MatterBrid
 - `ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md` - klare Abgrenzung zwischen `firmware_coder` und `expert_embedded_coder`
 - `role_boundary_firmware_vs_embedded.yaml` - maschinenlesbare Rollenabgrenzung
 - `agent_skills_catalog.json` - Gesamtuebersicht aller Rollen und Dateien
+- `ONBOARDING_SPECIALIST_INTEGRATION_DE.md` - Einordnung des Matter-Onboarding-Spezialisten in den Projektablauf
 
 ## Empfohlene Reihenfolge
 
@@ -27,7 +29,8 @@ Dieser Ordner beschreibt die Agentenrollen fuer die Entwicklung einer MatterBrid
 3. `delivery_planner`
 4. `firmware_coder`
 5. `expert_embedded_coder`
-6. `validation_tester`
-7. `technical_writer`
+6. `matter_commissioning_forensics`
+7. `validation_tester`
+8. `technical_writer`
 
-Der `build_tooling_steward` arbeitet querschnittlich ueber alle Phasen.
+Der `build_tooling_steward` arbeitet querschnittlich ueber alle Phasen. `matter_commissioning_forensics` greift besonders bei Onboarding-, Pairing- und Discovery-Problemen querschnittlich ein.
