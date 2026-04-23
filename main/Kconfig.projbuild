@@ -1,0 +1,15 @@
+menu "Miele Bridge Configuration"
+
+    config MIELE_CLIENT_ID
+        string "Miele API Client ID"
+        default "00000000-0000-0000-0000-000000000000"
+        help
+            The Client ID provided by Miele for the 3rd Party API.
+
+    config MIELE_CLIENT_SECRET
+        string "Miele API Client Secret"
+        default "your_secret_here"
+        help
+            The Client Secret provided by Miele for the 3rd Party API.
+
+endmenu

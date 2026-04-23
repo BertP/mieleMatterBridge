@@ -1,4 +1,4 @@
-schema_version: "1.0"
+schema_version: "1.1"
 project: "matterbridge_esp32s3_poc"
 required_fields_for_all_handovers:
   - "source_role"
@@ -17,6 +17,16 @@ required_fields_for_all_handovers:
   - "next_action"
 templates:
   -
+    name: "architect_to_uiux"
+    source_role: "system_architect"
+    target_role: "ui_ux_designer"
+    goal: "Translate hardware, interaction and product constraints into a usable UI concept."
+    must_include:
+      - "Display constraints and physical controls"
+      - "Onboarding and status requirements"
+      - "Non-goals for the current UI slice"
+      - "Technical limits for firmware and web delivery"
+  -
     name: "architect_to_mapper"
     source_role: "system_architect"
     target_role: "matter_api_mapper"
@@ -26,6 +36,26 @@ templates:
       - "Scope and non-goals"
       - "Assumptions about cloud connectivity and command model"
       - "Constraints from ESP32-S3 resources"
+  -
+    name: "uiux_to_firmware_coder"
+    source_role: "ui_ux_designer"
+    target_role: "firmware_coder"
+    goal: "Implement approved device screens and interaction states without redesigning them in code."
+    must_include:
+      - "Screen flow or page sequence"
+      - "State-specific UI behavior"
+      - "Layout limits and rendering rules"
+      - "Interaction and error-state details"
+  -
+    name: "uiux_to_technical_writer"
+    source_role: "ui_ux_designer"
+    target_role: "technical_writer"
+    goal: "Document approved UI concepts, states and operator guidance."
+    must_include:
+      - "Final screen and flow decisions"
+      - "Interaction rationale"
+      - "Known limitations"
+      - "Assets or references to include"
   -
     name: "mapper_to_firmware_coder"
     source_role: "matter_api_mapper"
@@ -96,43 +126,3 @@ templates:
       - "Observed constraint or blocker"
       - "Suggested alternatives or trade-offs"
       - "Impact on current timeline/scope"
-  -
-    name: "firmware_to_commissioning"
-    source_role: "firmware_coder"
-    target_role: "matter_commissioning_forensics"
-    goal: "Diagnose why a build that should commission still fails during onboarding or discovery."
-    must_include:
-      - "Build identifier and changed files"
-      - "Pairing method used and commissioner name"
-      - "Observed BLE, Wi-Fi and mDNS symptoms"
-      - "Relevant serial log excerpt and onboarding payload"
-  -
-    name: "embedded_to_commissioning"
-    source_role: "expert_embedded_coder"
-    target_role: "matter_commissioning_forensics"
-    goal: "Correlate runtime, timing or memory behavior with commissioning failures."
-    must_include:
-      - "Task and timing changes"
-      - "Heap or stack observations"
-      - "Network or TLS constraints"
-      - "Known boot or reconnect anomalies"
-  -
-    name: "commissioning_to_tester"
-    source_role: "matter_commissioning_forensics"
-    target_role: "validation_tester"
-    goal: "Turn a diagnosed onboarding path into reproducible validation steps."
-    must_include:
-      - "Known-good pairing flow"
-      - "Required commissioner and environment"
-      - "Expected logs or milestones"
-      - "Recovery steps for failed re-runs"
-  -
-    name: "commissioning_to_writer"
-    source_role: "matter_commissioning_forensics"
-    target_role: "technical_writer"
-    goal: "Document validated onboarding behavior, pitfalls and recovery procedures."
-    must_include:
-      - "Commissioning prerequisites"
-      - "Tested pairing commands or app steps"
-      - "Known failure signatures"
-      - "Recovery and factory-reset notes"

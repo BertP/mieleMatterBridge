@@ -152,3 +152,17 @@ esp_err_t ssd1306_draw_string(ssd1306_t *dev, uint8_t x, uint8_t y, const char *
     }
     return ESP_OK;
 }
+
+esp_err_t ssd1306_draw_bitmap(ssd1306_t *dev, uint8_t x, uint8_t y_page, uint8_t width, uint8_t height, const uint8_t *data) {
+    if (y_page > 7) return ESP_ERR_INVALID_ARG;
+    
+    uint8_t pages = (height + 7) / 8;
+    for (uint8_t p = 0; p < pages; p++) {
+        if (y_page + p > 7) break;
+        ssd1306_send_cmd(dev, 0xB0 + y_page + p);
+        ssd1306_send_cmd(dev, x & 0x0F);
+        ssd1306_send_cmd(dev, 0x10 | (x >> 4));
+        ssd1306_send_data(dev, &data[p * width], width);
+    }
+    return ESP_OK;
+}

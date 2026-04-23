@@ -1,10 +1,10 @@
 {
   "project": "matterbridge_esp32s3_poc",
-  "version": "5.0",
+  "version": "4.1",
   "generated_files": [
     "AGENT_SKILLS_UEBERSICHT_DE.md",
-    "ONBOARDING_SPECIALIST_INTEGRATION_DE.md",
     "ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md",
+    "UI_UX_DESIGNER_INTEGRATION_DE.md",
     "build_tooling_steward.md",
     "build_tooling_steward.yaml",
     "delivery_planner.md",
@@ -19,20 +19,20 @@
     "role_boundary_firmware_vs_embedded.yaml",
     "system_architect.md",
     "system_architect.yaml",
-    "matter_commissioning_forensics.md",
-    "matter_commissioning_forensics.yaml",
     "technical_writer.md",
     "technical_writer.yaml",
+    "ui_ux_designer.md",
+    "ui_ux_designer.yaml",
     "validation_tester.md",
     "validation_tester.yaml"
   ],
   "recommended_sequence": [
     "system_architect",
+    "ui_ux_designer",
     "matter_api_mapper",
     "delivery_planner",
     "firmware_coder",
     "expert_embedded_coder",
-    "matter_commissioning_forensics",
     "validation_tester",
     "technical_writer"
   ],
@@ -139,22 +139,6 @@
       ]
     },
     {
-      "role_id": "matter_commissioning_forensics",
-      "title": "Matter Commissioning Forensics",
-      "purpose": "Analysiert und behebt Onboarding-, Commissioning- und Interoperabilitaetsprobleme bei Matter-Geraeten auf ESP32-S3.",
-      "files": {
-        "markdown": "matter_commissioning_forensics.md",
-        "yaml": "matter_commissioning_forensics.yaml"
-      },
-      "handover_to": [
-        "firmware_coder",
-        "expert_embedded_coder",
-        "validation_tester",
-        "technical_writer",
-        "system_architect"
-      ]
-    },
-    {
       "role_id": "technical_writer",
       "title": "Technischer Redakteur",
       "purpose": "Haelt Projektdokumente fachlich aktuell, strukturell konsistent und professionell lesbar.",
@@ -163,12 +147,26 @@
         "yaml": "technical_writer.yaml"
       },
       "handover_to": []
+    },
+    {
+      "role_id": "ui_ux_designer",
+      "title": "UI/UX Designer",
+      "purpose": "Entwirft die Bedienlogik und Oberflaechen fuer 128x64-Monochrom-Displays sowie fuer eine responsive Webapp auf Desktop und Smartphone.",
+      "files": {
+        "markdown": "ui_ux_designer.md",
+        "yaml": "ui_ux_designer.yaml"
+      },
+      "handover_to": [
+        "firmware_coder",
+        "technical_writer"
+      ]
     }
   ],
   "supporting_documents": {
     "overview": "AGENT_SKILLS_UEBERSICHT_DE.md",
     "handover_templates": "handover_templates.yaml",
     "role_boundary_markdown": "ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md",
-    "role_boundary_yaml": "role_boundary_firmware_vs_embedded.yaml"
+    "role_boundary_yaml": "role_boundary_firmware_vs_embedded.yaml",
+    "uiux_integration": "UI_UX_DESIGNER_INTEGRATION_DE.md"
   }
 }

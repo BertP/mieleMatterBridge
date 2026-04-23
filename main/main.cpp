@@ -16,15 +16,92 @@
 #include "esp_http_server.h"
 #include "mdns.h"
 #include "cJSON.h"
-
-#include "ssd1306.h"
+#include "led_strip.h"
+#include "driver/rmt.h"
 #include "driver/i2c.h"
 #include "miele_matter_mapping.h"
 #include "esp_wifi.h"
+#include "ui_manager.h"
+
+// QR Code generation
+#include <setup_payload/QRCodeSetupPayloadGenerator.h>
+#include <setup_payload/SetupPayload.h>
+#include <platform/CHIPDeviceLayer.h>
+#include <platform/CommissionableDataProvider.h>
+#include <platform/DeviceInstanceInfoProvider.h>
+#include "qrcodegen.hpp"
 
 static const char *TAG = "MIELE_BRIDGE";
+#define APP_VERSION "2.3.0"
+#define APP_CODENAME "Transparent Zen"
+
+// Custom Device Info Provider to fix names in Google Home / Matter
+class CustomDeviceInstanceInfoProvider : public chip::DeviceLayer::DeviceInstanceInfoProvider {
+public:
+    CHIP_ERROR GetVendorName(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "Miele & Cie. KG");
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetVendorId(uint16_t & vendorId) override {
+        vendorId = 0xFFF1; 
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetProductName(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "Miele Matter Bridge");
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetProductId(uint16_t & productId) override {
+        productId = 0x8000;
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetHardwareVersion(uint16_t & hardwareVersion) override {
+        hardwareVersion = 1;
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetHardwareVersionString(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "v1.0");
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetSerialNumber(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "MIELE-MATTER-001");
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetManufacturingDate(uint16_t & year, uint8_t & month, uint8_t & day) override {
+        year = 2024; month = 4; day = 23;
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetRotatingDeviceIdUniqueId(chip::MutableByteSpan & uniqueIdSpan) override {
+        static const uint8_t uniqueId[] = { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77 };
+        return chip::CopySpanToMutableSpan(chip::ByteSpan(uniqueId), uniqueIdSpan);
+    }
+    CHIP_ERROR GetPartNumber(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "G7104-SCU");
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetProductURL(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "https://www.miele.de");
+        return CHIP_NO_ERROR;
+    }
+    CHIP_ERROR GetProductLabel(char * buf, size_t bufSize) override {
+        chip::Platform::CopyString(buf, bufSize, "Miele Dishwasher Bridge");
+        return CHIP_NO_ERROR;
+    }
+};
+
+static CustomDeviceInstanceInfoProvider gCustomDeviceInstanceInfoProvider;
+
+#define HEARTBEAT_LED_GPIO 48
+
 static ssd1306_t oled_dev;
+static led_strip_t *led_strip;
+static uint8_t heartbeat_brightness = 0;
 static uint16_t dishwasher_endpoint_id = 0;
+
+static bool is_wifi_connected = false;
+static bool is_commissioned = false;
+static bool is_miele_connected = false;
+static std::string last_dishwasher_status = "IDLE";
+static int last_dishwasher_progress = 0;
 
 // Marker for embedded assets
 extern const uint8_t index_html_start[] asm("_binary_index_html_start");
@@ -36,68 +113,154 @@ extern const uint8_t matter_svg_end[]   asm("_binary_matter_svg_end");
 
 using namespace esp_matter;
 using namespace esp_matter::endpoint;
+using namespace esp_matter::cluster;
 
-// Credentials (aus docs/miele3rdpartyapi/credentials.txt)
-#define MIELE_CLIENT_ID "0df585cb-2ac3-4bb0-8dd7-5fafe9e392fe"
-#define MIELE_CLIENT_SECRET "60reBsf93NOCiPQiRS1Qxh04skNpoely"
+// Credentials are now managed via Kconfig (CONFIG_MIELE_CLIENT_ID / CONFIG_MIELE_CLIENT_SECRET)
+#define MIELE_CLIENT_ID CONFIG_MIELE_CLIENT_ID
+#define MIELE_CLIENT_SECRET CONFIG_MIELE_CLIENT_SECRET
 
-// QR-Code Matrix (25x25) - 1 = Schwarz, 0 = Weiß
-const int QR_SIZE = 25;
-const uint8_t qr_matrix[25][25] = {
-    {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1},
-    {1, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1},
-    {1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1},
-    {1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0},
-    {0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1},
-    {0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0},
-    {1, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1},
-    {0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0},
-    {0, 0, 1, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 1},
-    {1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0},
-    {0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1},
-    {1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1},
-    {1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0},
-    {1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0},
-    {1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 1},
-    {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1},
-    {1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1},
+// static bool is_commissioned = false; // Moved up
+
+// 32x32 Checkmark Bitmap (4 pages high)
+static const uint8_t checkmark_bitmap[] = {
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xC0, 0xE0, 0x70, 0x38, 0x1C, 0x0E,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+    0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F, 0xFF, 0xFE, 0x7C, 0x38, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xC0,
+    0xE0, 0xF0, 0xF8, 0xFC, 0x7E, 0x3F, 0x1F, 0x0F, 0x07, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-static bool is_commissioned = false;
+static void refresh_display() {
+    if (!is_commissioned) return; 
+    
+    // Get IP Address safely
+    char ip_addr[IP4ADDR_STRLEN_MAX] = "0.0.0.0";
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+            esp_ip4addr_ntoa(&ip_info.ip, ip_addr, IP4ADDR_STRLEN_MAX);
+        }
+    }
+
+    ui::draw_dashboard(&oled_dev, APP_VERSION, 
+                      is_wifi_connected, 
+                      is_commissioned, 
+                      is_miele_connected, 
+                      ip_addr);
+}
+
+static void draw_success_screen() {
+    ssd1306_clear(&oled_dev);
+    char header[32];
+    snprintf(header, sizeof(header), "MIELE BRIDGE %s", APP_VERSION);
+    ssd1306_draw_string(&oled_dev, (128 - strlen(header)*8)/2, 0, header);
+    
+    // Draw Checkmark in center (32x32 is 4 pages)
+    ssd1306_draw_bitmap(&oled_dev, 48, 2, 32, 4, checkmark_bitmap);
+    
+    ssd1306_draw_string(&oled_dev, 32, 7, "SYSTEM READY");
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    refresh_display();
+}
+
 
 static void draw_qr_code() {
-    uint8_t x_offset = 39; // Zentriert: (128 - 50) / 2
+    using namespace qrcodegen;
     
-    // QR Code zeichnen (2x2 Skalierung)
-    // Wir nutzen Page 1 bis 7 (Page 0 ist für den Titel)
-    for (int p = 1; p <= 7; p++) {
-        ssd1306_send_cmd(&oled_dev, 0xB0 + p);
+    // 1. Get Setup Info from Matter Stack
+    uint32_t setup_passcode = 0;
+    uint16_t setup_discriminator = 0;
+    uint16_t vid = 0, pid = 0;
+    
+    // Safety checks for providers
+    auto* commissionable_provider = chip::DeviceLayer::GetCommissionableDataProvider();
+    auto* instance_info_provider = chip::DeviceLayer::GetDeviceInstanceInfoProvider();
+
+    if (commissionable_provider) {
+        (void)commissionable_provider->GetSetupPasscode(setup_passcode);
+        (void)commissionable_provider->GetSetupDiscriminator(setup_discriminator);
+    } else {
+        ESP_LOGW(TAG, "CommissionableDataProvider not ready, using defaults");
+        setup_passcode = 20202021;
+        setup_discriminator = 3840;
+    }
+    
+    if (instance_info_provider) {
+        (void)instance_info_provider->GetVendorId(vid);
+        (void)instance_info_provider->GetProductId(pid);
+    } else {
+        ESP_LOGW(TAG, "DeviceInstanceInfoProvider not ready, using defaults");
+        vid = 0xFFF1;
+        pid = 0x8000;
+    }
+    
+    // 2. Generate Setup Payload String
+    chip::SetupPayload payload;
+    payload.version = 0;
+    payload.vendorID = vid;
+    payload.productID = pid;
+    payload.commissioningFlow = chip::CommissioningFlow::kStandard;
+    payload.rendezvousInformation.SetValue(chip::RendezvousInformationFlag::kBLE);
+    payload.setUpPINCode = setup_passcode;
+    payload.discriminator.SetLongValue(setup_discriminator);
+    
+    std::string qr_url;
+    // 3. Generate QR Payload String
+    (void)chip::QRCodeSetupPayloadGenerator(payload).payloadBase38Representation(qr_url);
+    ESP_LOGI(TAG, "Generated QR Payload: %s", qr_url.c_str());
+
+    // 3. Generate QR Matrix
+    QrCode qr = QrCode::encodeText(qr_url.c_str(), QrCode::Ecc::LOW);
+    int size = qr.getSize();
+    
+    // 4. Render to OLED (centered, 2x2 scaling if possible)
+    // Clear screen first
+    ssd1306_clear(&oled_dev);
+    char header[20];
+    snprintf(header, sizeof(header), "PAIRING %s", APP_VERSION);
+    ssd1306_draw_string(&oled_dev, 0, 0, header);
+    
+    // Calculate scaling and offsets
+    int scale = (size * 2 <= 56) ? 2 : 1; // max height is 64, minus page 0 (8px) = 56px
+    uint8_t x_offset = (128 - (size * scale)) / 2;
+    uint8_t y_page_start = 1; // Start below "PAIRING MODE"
+    
+    for (int p = 0; p < 7; p++) { // Pages 1 to 7
+        uint8_t current_page = y_page_start + p;
+        if (current_page > 7) break;
+        
+        ssd1306_send_cmd(&oled_dev, 0xB0 + current_page);
         ssd1306_send_cmd(&oled_dev, x_offset & 0x0F);
         ssd1306_send_cmd(&oled_dev, 0x10 | (x_offset >> 4));
         
-        uint8_t page_data[50];
-        for (int module_x = 0; module_x < 25; module_x++) {
+        uint8_t page_data[128] = {0};
+        
+        for (int qx = 0; qx < size; qx++) {
             uint8_t byte = 0;
-            int r_start = (p - 1) * 4;
-            for (int i = 0; i < 4; i++) {
-                int r = r_start + i;
-                if (r < 25 && qr_matrix[r][module_x]) {
-                    byte |= (0x03 << (i * 2));
+            // For each bit in the page (8 vertical pixels)
+            for (int bit = 0; bit < 8; bit++) {
+                int screen_y = p * 8 + bit;
+                int qr_y = screen_y / scale;
+                int qr_x = qx;
+                
+                if (qr_y < size && qr.getModule(qr_x, qr_y)) {
+                    byte |= (1 << bit);
                 }
             }
-            page_data[module_x * 2] = byte;
-            page_data[module_x * 2 + 1] = byte;
+            
+            for (int s = 0; s < scale; s++) {
+                page_data[qx * scale + s] = byte;
+            }
         }
-        ssd1306_send_data(&oled_dev, page_data, 50);
+        ssd1306_send_data(&oled_dev, page_data, size * scale);
     }
+    
+    // Also log manual code
+    ESP_LOGI(TAG, "Manual Pairing PIN: %lu", setup_passcode);
 }
 
 /**
@@ -106,17 +269,26 @@ static void draw_qr_code() {
 static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg) {
     switch (event->Type) {
         case chip::DeviceLayer::DeviceEventType::kInterfaceIpAddressChanged: {
-            ESP_LOGI(TAG, "IP-Adresse erhalten oder geändert.");
-            // Wir versuchen die IP aufs OLED zu bringen, damit du siehst dass er im WLAN ist!
-            ssd1306_draw_string(&oled_dev, 0, 7, "IP: CONNECTING.. ");
+            ESP_LOGI(TAG, "IP-Adresse erhalten oder geändert. Warte kurz für mDNS Stabilität...");
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Gedenksekunde für mDNS Stack
+            char ip_buf[32];
+            esp_netif_ip_info_t ip_info;
+            esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+            if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+                esp_ip4addr_ntoa(&ip_info.ip, ip_buf, sizeof(ip_buf));
+                ESP_LOGI(TAG, "IP-Adresse: %s", ip_buf);
+                is_wifi_connected = true;
+                refresh_display();
+            } else {
+                is_wifi_connected = false;
+                refresh_display();
+            }
             break;
         }
         case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
             ESP_LOGI(TAG, "Pairing erfolgreich abgeschlossen! 🎉");
             is_commissioned = true;
-            ssd1306_clear(&oled_dev);
-            ssd1306_draw_string(&oled_dev, 0, 0, "MIELE BRIDGE   ");
-            ssd1306_draw_string(&oled_dev, 0, 7, "MATTER: OK      ");
+            draw_success_screen();
             break;
         case chip::DeviceLayer::DeviceEventType::kFailSafeTimerExpired:
             ESP_LOGW(TAG, "Fail-safe Timer abgelaufen!");
@@ -140,12 +312,19 @@ static esp_err_t index_get_handler(httpd_req_t *req) {
  * @brief GET /login Handler: Startet den Miele OAuth Flow
  */
 static esp_err_t login_get_handler(httpd_req_t *req) {
+    char host[64];
+    if (httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) != ESP_OK) {
+        strcpy(host, "miele-bridge.local");
+    }
+
     // Hier bauen wir die Miele Auth URL zusammen
     char redirect_url[512];
     snprintf(redirect_url, sizeof(redirect_url), 
         "https://auth.domestic.miele-iot.com/partner/realms/mcs/protocol/openid-connect/auth?"
-        "client_id=%s&response_type=code&scope=openid%%20mcs_thirdparty_read%%20mcs_thirdparty_write&redirect_uri=http://miele-bridge.local/callback",
-        MIELE_CLIENT_ID);
+        "client_id=%s&response_type=code&scope=openid%%20mcs_thirdparty_read%%20mcs_thirdparty_write&redirect_uri=http://%s/callback",
+        MIELE_CLIENT_ID, host);
+    
+    ESP_LOGI(TAG, "Redirecting to Miele Auth: %s", redirect_url);
     
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", redirect_url);
@@ -184,37 +363,46 @@ static esp_err_t callback_get_handler(httpd_req_t *req) {
     if (buf_len > 1) {
         buf = (char *)malloc(buf_len);
         if (httpd_req_get_url_query_str(req, buf, buf_len) == ESP_OK) {
-            httpd_query_key_value(buf, "code", code, sizeof(code));
+            ESP_LOGI(TAG, "Query-String: %s", buf);
+            if (httpd_query_key_value(buf, "code", code, sizeof(code)) == ESP_OK) {
+                ESP_LOGI(TAG, "Code erfolgreich extrahiert (Länge: %d)", strlen(code));
+            } else {
+                ESP_LOGW(TAG, "Parameter 'code' nicht im Query-String gefunden.");
+            }
         }
         free(buf);
     }
 
     if (strlen(code) > 0) {
-        if (miele::api::exchange_code(code) == ESP_OK) {
-            const char *success_html = 
-                "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'>"
-                "<style>body{background:#121212;color:white;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0; text-align:center;}"
-                ".card{background:#1e1e1e;padding:40px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,0.5);width:80%;max-width:400px; border:1px solid #333;}"
-                ".logos{display:flex;justify-content:center;gap:20px;margin-bottom:30px;align-items:center;}"
-                ".logos img{height:40px;}"
-                ".logos .sep{width:1px; height:30px; background:#444;}"
-                "h1{color:#bc001a;margin:0 0 10px 0;font-size:24px;}"
-                "p{color:#aaa;line-height:1.6;}"
-                ".btn{display:inline-block;margin-top:20px;padding:12px 24px;background:#bc001a;color:white;text-decoration:none;border-radius:30px;font-weight:bold;}"
-                "</style></head><body><div class='card'>"
-                "<div class='logos'><img src='/assets/miele.svg'><div class='sep'></div><img src='/assets/matter.svg'></div>"
-                "<h1>Verbunden!</h1>"
-                "<p>Tokens erfolgreich generiert und sicher im NVS gespeichert.</p>"
-                "<p>Die Bridge synchronisiert nun Ihre Ger&auml;te.</p>"
-                "<a href='/' class='btn'>Zurück zur Übersicht</a>"
-                "</div></body></html>";
-            httpd_resp_set_type(req, "text/html; charset=utf-8");
-            httpd_resp_send(req, success_html, strlen(success_html));
-            return ESP_OK;
+        ESP_LOGI(TAG, "Auth Code erhalten, starte Exchange...");
+        
+        // Dynamische redirect_uri basierend auf dem Host-Header
+        char host[64];
+        if (httpd_req_get_hdr_value_str(req, "Host", host, sizeof(host)) != ESP_OK) {
+            strcpy(host, "miele-bridge.local");
         }
+        std::string redirect_uri = "http://";
+        redirect_uri += host;
+        redirect_uri += "/callback";
+        
+        ESP_LOGI(TAG, "Benutze redirect_uri: %s", redirect_uri.c_str());
+        esp_err_t exchange_err = miele::api::exchange_code(code, redirect_uri);
+        if (exchange_err == ESP_OK) {
+            ESP_LOGI(TAG, "Miele Cloud Login erfolgreich! 🎉");
+            const char *success_html = 
+                "<html><head><meta http-equiv='refresh' content='2;url=/'></head>"
+                "<body style='background:#121212;color:white;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'>"
+                "<div style='text-align:center;'><h1>Verbunden!</h1><p>Leite weiter zum Dashboard...</p></div>"
+                "</body></html>";
+            httpd_resp_send(req, success_html, HTTPD_RESP_USE_STRLEN);
+        } else {
+            ESP_LOGE(TAG, "Exchange Code fehlgeschlagen: 0x%x", exchange_err);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Miele API Exchange failed");
+        }
+    } else {
+        ESP_LOGW(TAG, "Kein Auth Code im Callback gefunden!");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing code parameter");
     }
-
-    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Fehler beim Code-Austausch");
     return ESP_OK;
 }
 
@@ -223,8 +411,73 @@ static esp_err_t callback_get_handler(httpd_req_t *req) {
  */
 static esp_err_t not_found_handler(httpd_req_t *req, httpd_err_code_t error) {
     ESP_LOGW(TAG, "Nicht gefundene URI angefragt: %s", req->uri);
+    httpd_resp_set_type(req, "text/plain");
     httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "URI nicht gefunden");
     return ESP_OK;
+}
+
+/**
+ * @brief GET /api/status Handler: Liefert Systemstatus als JSON
+ */
+static esp_err_t status_get_handler(httpd_req_t *req) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "version", APP_VERSION);
+    cJSON_AddBoolToObject(root, "commissioned", is_commissioned);
+    cJSON_AddBoolToObject(root, "miele_auth", miele::api::is_authenticated());
+    
+    char ip_buf[32] = "0.0.0.0";
+    esp_netif_ip_info_t ip_info;
+    esp_netif_t* netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+        esp_ip4addr_ntoa(&ip_info.ip, ip_buf, sizeof(ip_buf));
+    }
+    cJSON_AddStringToObject(root, "ip", ip_buf);
+
+    const char *sys_info = cJSON_PrintUnformatted(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, sys_info, HTTPD_RESP_USE_STRLEN);
+    
+    free((void*)sys_info);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/reset Handler: Führt einen Werksreset durch
+ */
+static esp_err_t reset_post_handler(httpd_req_t *req) {
+    ESP_LOGW(TAG, "FACTORY RESET TRIGGERED VIA WEB UI!");
+    
+    const char *response = "{\"status\":\"resetting\"}";
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
+    
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    nvs_flash_erase();
+    esp_restart();
+    return ESP_OK;
+}
+
+/**
+ * @brief Hintergrund-Task für den Heartbeat (LED-Puls)
+ */
+static void heartbeat_task(void *pvParameters) {
+    bool increasing = true;
+    while (1) {
+        if (led_strip) {
+            led_strip->set_pixel(led_strip, 0, 0, 0, heartbeat_brightness);
+            led_strip->refresh(led_strip, 100);
+        }
+        
+        if (increasing) {
+            heartbeat_brightness++;
+            if (heartbeat_brightness >= 25) increasing = false;
+        } else {
+            heartbeat_brightness--;
+            if (heartbeat_brightness <= 2) increasing = true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
 
 /**
@@ -235,25 +488,26 @@ static void miele_sync_task(void *pvParameters) {
     
     while (1) {
         if (!is_commissioned) {
-            draw_qr_code();
-            vTaskDelay(pdMS_TO_TICKS(10000));
+            // Während des Pairings halten wir uns extrem zurück, um die CPU zu schonen.
+            // Der QR-Code wurde bereits einmalig in app_main gezeichnet.
+            vTaskDelay(pdMS_TO_TICKS(5000));
             continue;
         }
 
         if (miele::api::is_authenticated()) {
-            ssd1306_draw_string(&oled_dev, 0, 2, "CLOUD: OK   ");
+            // Once commissioned, we don't draw debug info to OLED anymore (Zen Design)
+            if (!is_commissioned) {
+                ssd1306_draw_string(&oled_dev, 0, 2, "CLOUD: OK   ");
+            }
+            
             ESP_LOGI(TAG, "Sync: Frage Miele Ger&auml;teliste ab...");
             std::string response;
             if (miele::api::get_devices(response) == ESP_OK) {
-                ESP_LOGI(TAG, "Miele Cloud Discovery: %s", response.c_str());
-                
-                // Antwort parsen und gezielt den Geschirrspüler suchen
+                // ... logic to update Matter attributes (always needed) ...
                 cJSON* root = cJSON_Parse(response.c_str());
                 if (root) {
                     cJSON* device = NULL;
                     cJSON* target_dishwasher = NULL;
-                    
-                    // Iteriere durch alle Fabriknummern (Keys)
                     cJSON_ArrayForEach(device, root) {
                         cJSON* ident = cJSON_GetObjectItem(device, "ident");
                         if (ident) {
@@ -268,42 +522,29 @@ static void miele_sync_task(void *pvParameters) {
                     if (target_dishwasher) {
                         miele::mapping::update_dishwasher_attributes(dishwasher_endpoint_id, target_dishwasher);
                         
-                        // OLED Live-Update
+                        // Update UI state
                         cJSON* state = cJSON_GetObjectItem(target_dishwasher, "state");
                         if (state) {
                             cJSON* status = cJSON_GetObjectItem(state, "status");
-                            cJSON* rem = cJSON_GetObjectItem(state, "remainingTime");
-                            if (status && rem) {
-                                char buf[17];
-                                // Status mit Padding zum Löschen alter Reste
-                                snprintf(buf, sizeof(buf), "STA: %-11s", cJSON_GetObjectItem(status, "value_localized")->valuestring);
-                                ssd1306_draw_string(&oled_dev, 0, 4, buf);
-                                
-                                snprintf(buf, sizeof(buf), "REM: %02d:%02d      ", 
-                                        cJSON_GetArrayItem(rem, 0)->valueint,
-                                        cJSON_GetArrayItem(rem, 1)->valueint);
-                                ssd1306_draw_string(&oled_dev, 0, 5, buf);
-                                
-                                // Pairing Info am unteren Rand (FIXED PIN)
-                                ssd1306_draw_string(&oled_dev, 0, 7, "PIN: 12345678   ");
+                            if (status) last_dishwasher_status = cJSON_GetObjectItem(status, "value_localized")->valuestring;
+                            
+                            cJSON* signal = cJSON_GetObjectItem(state, "signalInfo");
+                            if (signal && cJSON_GetObjectItem(signal, "value_raw")->valueint > 0) {
+                                last_dishwasher_status = "FINISHED";
+                                last_dishwasher_progress = 100;
+                            } else {
+                                // Simple progress simulation if no direct progress field
+                                last_dishwasher_progress = 50; // TODO: Calculate from remainingTime
                             }
                         }
-                    } else {
-                        ESP_LOGW(TAG, "Kein Geschirrspüler in der Cloud-Liste gefunden!");
-                        ssd1306_draw_string(&oled_dev, 0, 4, "G7310 NOT FOUND");
+                        refresh_display();
                     }
                     cJSON_Delete(root);
                 }
-                ssd1306_draw_string(&oled_dev, 0, 7, "SYNC: DONE    ");
-            } else {
-                ESP_LOGE(TAG, "Sync: Fehler beim Abrufen der Ger&auml;teliste.");
-                ssd1306_draw_string(&oled_dev, 0, 4, "SYNC: ERROR ");
             }
-            // Aktuell alle 60 Sek poller, später Push/SSE
-            vTaskDelay(pdMS_TO_TICKS(60000)); 
+            vTaskDelay(pdMS_TO_TICKS(30000)); 
         } else {
-            ssd1306_draw_string(&oled_dev, 0, 2, "CLOUD: LOGIN");
-            // Noch nicht eingeloggt, alle 5 Sek prüfen
+            refresh_display();
             vTaskDelay(pdMS_TO_TICKS(5000));
         }
     }
@@ -331,6 +572,12 @@ static void start_webserver() {
 
         httpd_uri_t matter_logo_uri = { .uri = "/assets/matter.svg", .method = HTTP_GET, .handler = matter_svg_handler };
         httpd_register_uri_handler(server, &matter_logo_uri);
+
+        httpd_uri_t status_uri = { .uri = "/api/status", .method = HTTP_GET, .handler = status_get_handler };
+        httpd_register_uri_handler(server, &status_uri);
+
+        httpd_uri_t reset_uri = { .uri = "/api/reset", .method = HTTP_POST, .handler = reset_post_handler };
+        httpd_register_uri_handler(server, &reset_uri);
         
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, not_found_handler);
 
@@ -357,23 +604,44 @@ extern "C" void app_main()
         .scl_io_num = 9,
         .sda_pullup_en = GPIO_PULLUP_ENABLE,
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master = { .clk_speed = 400000 }
+        .master = { .clk_speed = 400000 },
+        .clk_flags = 0
     };
     i2c_param_config(I2C_NUM_0, &i2c_conf);
     i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
 
     ssd1306_init(&oled_dev, I2C_NUM_0, 0x3C);
     ssd1306_clear(&oled_dev);
-    ssd1306_draw_string(&oled_dev, 0, 0, "MIELE BRIDGE");
+    char boot_header[20];
+    snprintf(boot_header, sizeof(boot_header), "MIELE %s", APP_VERSION);
+    ssd1306_draw_string(&oled_dev, 0, 0, boot_header);
     ssd1306_draw_string(&oled_dev, 0, 2, "BOOTING...");
+
+    // Heartbeat LED Initialisierung (WS2812 auf GPIO 48) - Version 1.x/2.x API
+    rmt_config_t rmt_conf_pulse = RMT_DEFAULT_CONFIG_TX((gpio_num_t)HEARTBEAT_LED_GPIO, RMT_CHANNEL_0);
+    rmt_conf_pulse.clk_div = 2;
+    ::rmt_config(&rmt_conf_pulse);
+    rmt_driver_install(rmt_conf_pulse.channel, 0, 0);
+
+    led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(1, (led_strip_dev_t)RMT_CHANNEL_0);
+    led_strip = led_strip_new_rmt_ws2812(&strip_config);
+    xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 1, NULL);
 
     /* 1. Basis-Infrastruktur */
     ssd1306_draw_string(&oled_dev, 0, 2, "INIT NET...     ");
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Explizite mDNS Initialisierung für Webserver & Callback Stabilität
+    esp_err_t mdns_err = mdns_init();
+    if (mdns_err == ESP_OK) {
+        mdns_hostname_set("miele-bridge");
+        mdns_instance_name_set("Miele Matter Bridge");
+        mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+        ESP_LOGI(TAG, "mDNS Hostname auf 'miele-bridge.local' gesetzt.");
+    }
     
-    // WLAN Power Save deaktivieren für maximale Pairing-Stabilität
-    esp_wifi_set_ps(WIFI_PS_NONE);
+    // WLAN Power Save wird später in app_main nach dem Stack-Start deaktiviert
 
     ssd1306_draw_string(&oled_dev, 0, 2, "INIT MIELE API..");
     miele::api::config_t miele_config;
@@ -385,7 +653,9 @@ extern "C" void app_main()
     node::config_t node_config;
     node_t *node = node::create(&node_config, NULL, NULL);
 
+
     ssd1306_draw_string(&oled_dev, 0, 2, "CREATE ENDP...  ");
+
     aggregator::config_t aggregator_config;
     endpoint_t *aggregator_endpoint = aggregator::create(node, &aggregator_config, ENDPOINT_FLAG_NONE, NULL);
     (void)aggregator_endpoint; // Unused for now
@@ -395,40 +665,57 @@ extern "C" void app_main()
     dishwasher_endpoint_id = endpoint::get_id(dishwasher_endpoint);
     (void)dishwasher_endpoint;
 
-    /* 5. Onboarding Webserver & mDNS */
+    /* 5. Onboarding Webserver (mDNS wird von Matter verwaltet) */
     ssd1306_draw_string(&oled_dev, 0, 2, "NET CONFIG...   ");
-    mdns_init();
-    mdns_hostname_set("miele-bridge");
     start_webserver();
 
     /* 7. Start Matter Stack & Console */
     ssd1306_draw_string(&oled_dev, 0, 2, "MATTER START... ");
     
+    // Set custom info provider BEFORE starting Matter to fix naming
+    chip::DeviceLayer::SetDeviceInstanceInfoProvider(&gCustomDeviceInstanceInfoProvider);
+    
+    // Check commissioning status
+    is_commissioned = chip::DeviceLayer::ConfigurationMgr().IsFullyProvisioned();
+    
     err = esp_matter::start(app_event_cb);
     if (err != ESP_OK) {
         ssd1306_draw_string(&oled_dev, 0, 2, "MATTER ERROR!   ");
     } else {
-        esp_matter::console::init(); // Konsole für Befehle aktivieren
-        is_commissioned = chip::DeviceLayer::ConfigurationMgr().IsFullyProvisioned();
+        esp_matter::console::init(); 
         
+        // FORCE Miele Identity in Basic Information Cluster (Endpoint 0)
+        // We do this AFTER start to ensure the clusters are fully ready
+        esp_matter_attr_val_t val = esp_matter_char_str((char*)"Miele & Cie. KG", strlen("Miele & Cie. KG"));
+        attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::VendorName::Id, &val);
+        
+        val = esp_matter_char_str((char*)"Miele Matter Bridge", strlen("Miele Matter Bridge"));
+        attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::ProductName::Id, &val);
+
+        val = esp_matter_char_str((char*)"2.3.0", strlen("2.3.0"));
+        attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::SoftwareVersionString::Id, &val);
+
+        // WLAN Power Save erst hier deaktivieren, wenn der Stack (und damit Wifi) bereit ist
+        esp_wifi_set_ps(WIFI_PS_NONE);
+
         if (!is_commissioned) {
-            ssd1306_clear(&oled_dev);
+            // ZEN SEQUENCE: QR Code einmalig zeichnen und dann Display-Updates pausieren
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            ESP_LOGI(TAG, "Device not commissioned. Showing QR code once...");
             draw_qr_code();
-            
-            ESP_LOGI(TAG, "==============================================");
-            ESP_LOGI(TAG, "   MATTER IDENTITY FORCED BY CONFIG: ");
-            ESP_LOGI(TAG, "   PIN: 12345678");
-            ESP_LOGI(TAG, "   DISCRIMINATOR: 1234");
-            ESP_LOGI(TAG, "==============================================");
-            
-            // Jetzt lassen wir den Stack die offizielle Wahrheit sprechen:
-            chip::DeviceLayer::ConfigurationMgr().LogDeviceConfig();
+            // Wir lassen den QR-Code stehen und starten keine Hintergrund-UI-Updates
+        } else {
+            ESP_LOGI(TAG, "Device already commissioned. Switching to Dashboard.");
+            draw_success_screen();
         }
     }
 
-    /* 8. Miele Sync Task starten */
-    xTaskCreate(miele_sync_task, "miele_sync", 8192, NULL, 5, NULL);
+    /* 8. Miele Sync Task starten (nur wenn bereits commissioned, sonst warten wir) */
+    if (is_commissioned) {
+        xTaskCreate(miele_sync_task, "miele_sync", 8192, NULL, 5, NULL);
+    }
 
+    ESP_LOGI(TAG, "Miele Matter Bridge %s (%s) gestartet.", APP_VERSION, APP_CODENAME);
     ESP_LOGI(TAG, "Matter Stack läuft. Miele Cloud Sync gestartet.");
 
     while (1) {

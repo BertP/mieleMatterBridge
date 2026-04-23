@@ -4,6 +4,8 @@
 #include "esp_log.h"
 #include "cJSON.h"
 #include "nvs_flash.h"
+#include <sstream>
+#include <iomanip>
 
 static const char *TAG = "MIELE_CLIENT";
 
@@ -11,6 +13,20 @@ namespace miele {
 namespace api {
 
 static config_t s_config;
+
+static std::string url_encode(const std::string &value) {
+    std::ostringstream escaped;
+    escaped.fill('0');
+    escaped << std::hex;
+    for (char c : value) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+        } else {
+            escaped << '%' << std::setw(2) << int((unsigned char)c);
+        }
+    }
+    return escaped.str();
+}
 
 static esp_err_t save_tokens_to_nvs() {
     nvs_handle_t handle;
@@ -145,15 +161,15 @@ esp_err_t get_devices(std::string &response) {
     return perform_request(url.c_str(), HTTP_METHOD_GET, NULL, response);
 }
 
-esp_err_t exchange_code(const std::string &code) {
+esp_err_t exchange_code(const std::string &code, const std::string &redirect_uri) {
     ESP_LOGI(TAG, "Tausche Authorization Code gegen Tokens...");
     const char *token_url = "https://auth.domestic.miele-iot.com/partner/realms/mcs/protocol/openid-connect/token";
 
     std::string body = "grant_type=authorization_code";
     body += "&client_id=" + s_config.client_id;
     body += "&client_secret=" + s_config.client_secret;
-    body += "&code=" + code;
-    body += "&redirect_uri=http://miele-bridge.local/callback";
+    body += "&code=" + url_encode(code);
+    body += "&redirect_uri=" + url_encode(redirect_uri);
 
     std::string response;
     esp_err_t err = perform_request(token_url, HTTP_METHOD_POST, body.c_str(), response);

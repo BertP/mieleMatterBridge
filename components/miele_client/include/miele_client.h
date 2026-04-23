@@ -40,7 +40,7 @@ bool is_authenticated();
 /**
  * @brief Tauscht den Authorization Code gegen Tokens
  */
-esp_err_t exchange_code(const std::string &code);
+esp_err_t exchange_code(const std::string &code, const std::string &redirect_uri);
 
 /**
  * @brief Refresh the Access Token using the Refresh Token

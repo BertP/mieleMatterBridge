@@ -12,25 +12,25 @@ Dieser Ordner beschreibt die Agentenrollen fuer die Entwicklung einer MatterBrid
 - `validation_tester` - Validation Tester: Prueft Funktion, Robustheit und Scope-Treue des PoC mit reproduzierbaren Tests.
 - `build_tooling_steward` - Build & Tooling Steward: Sichert reproduzierbare Builds, Toolchain-Konsistenz, CI und einheitliche Artefakte.
 - `technical_writer` - Technischer Redakteur: Haelt Projektdokumente fachlich aktuell, strukturell konsistent und professionell lesbar.
-- `matter_commissioning_forensics` - Matter Commissioning Forensics: Analysiert und behebt Onboarding-, Commissioning- und Interoperabilitaetsprobleme bei Matter-Geraeten auf ESP32-S3.
+- `ui_ux_designer` - UI/UX Designer: Entwirft die Bedienlogik und Oberflaechen fuer 128x64-Monochrom-Displays sowie fuer eine responsive Webapp auf Desktop und Smartphone.
 
 ## Weitere Dateien
 
 - `handover_templates.yaml` - standardisierte Uebergabevorlagen zwischen den Agenten
 - `ROLE_BOUNDARY_FIRMWARE_VS_EMBEDDED_DE.md` - klare Abgrenzung zwischen `firmware_coder` und `expert_embedded_coder`
 - `role_boundary_firmware_vs_embedded.yaml` - maschinenlesbare Rollenabgrenzung
+- `UI_UX_DESIGNER_INTEGRATION_DE.md` - Einordnung des UI/UX Designers im Setup
 - `agent_skills_catalog.json` - Gesamtuebersicht aller Rollen und Dateien
-- `ONBOARDING_SPECIALIST_INTEGRATION_DE.md` - Einordnung des Matter-Onboarding-Spezialisten in den Projektablauf
 
 ## Empfohlene Reihenfolge
 
 1. `system_architect`
-2. `matter_api_mapper`
-3. `delivery_planner`
-4. `firmware_coder`
-5. `expert_embedded_coder`
-6. `matter_commissioning_forensics`
+2. `ui_ux_designer`
+3. `matter_api_mapper`
+4. `delivery_planner`
+5. `firmware_coder`
+6. `expert_embedded_coder`
 7. `validation_tester`
 8. `technical_writer`
 
-Der `build_tooling_steward` arbeitet querschnittlich ueber alle Phasen. `matter_commissioning_forensics` greift besonders bei Onboarding-, Pairing- und Discovery-Problemen querschnittlich ein.
+Der `build_tooling_steward` arbeitet querschnittlich ueber alle Phasen.

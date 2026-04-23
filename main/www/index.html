@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Miele Matter Bridge | Onboarding</title>
+    <title>Miele Matter Bridge | Dashboard</title>
     <style>
         :root {
             --miele-red: #C60018;
             --miele-black: #1A1A1A;
-            --bg-grad: linear-gradient(135deg, #1a1a1a 0%, #333333 100%);
-            --card-bg: rgba(255, 255, 255, 0.05);
+            --bg-grad: linear-gradient(135deg, #121212 0%, #222222 100%);
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --success-green: #44FF44;
         }
 
         body {
@@ -26,19 +27,19 @@
 
         .container {
             width: 100%;
-            max-width: 450px;
+            max-width: 500px;
             padding: 20px;
             box-sizing: border-box;
         }
 
         .card {
             background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 24px;
-            padding: 40px 30px;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 32px;
+            padding: 40px;
             text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
         }
 
         .logo-row {
@@ -50,33 +51,59 @@
         }
 
         .logo-row img {
-            height: 32px;
+            height: 28px;
             width: auto;
-        }
-
-        .logo-row .matter-logo {
-            height: 32px;
+            opacity: 0.8;
         }
 
         .logo-divider {
             width: 1px;
-            height: 30px;
-            background: rgba(255,255,255,0.2);
+            height: 20px;
+            background: rgba(255,255,255,0.1);
         }
 
         h1 {
-            font-size: 24px;
+            font-size: 28px;
             font-weight: 300;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 40px;
+        }
+
+        .status-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+
+        .status-item {
+            background: rgba(255,255,255,0.03);
+            padding: 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .status-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 8px;
             letter-spacing: 1px;
         }
 
-        p {
-            font-size: 15px;
-            color: #AAAAAA;
-            line-height: 1.6;
-            margin-bottom: 40px;
+        .status-value {
+            font-weight: 600;
+            font-size: 14px;
         }
+
+        .connected { color: var(--success-green); }
+        .disconnected { color: #FF4444; }
 
         .btn {
             display: block;
@@ -84,39 +111,61 @@
             color: white;
             text-decoration: none;
             padding: 18px;
-            border-radius: 12px;
+            border-radius: 16px;
             font-weight: 600;
             font-size: 16px;
-            transition: transform 0.2s, background 0.2s;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
             box-shadow: 0 10px 20px rgba(198, 0, 24, 0.3);
         }
 
-        .btn:active {
-            transform: scale(0.98);
-            background: #A00014;
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #888;
+            margin-top: 20px;
+            box-shadow: none;
         }
 
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: #44FF44;
+        .btn-outline:hover {
+            background: rgba(255,0,0,0.1);
+            color: #FF4444;
+            border-color: rgba(255,0,0,0.2);
+            transform: none;
+            box-shadow: none;
+        }
+
+        .hidden { display: none; }
+
+        .loading-spinner {
+            border: 2px solid rgba(255,255,255,0.1);
+            border-top: 2px solid var(--miele-red);
             border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
             display: inline-block;
-            margin-right: 8px;
-            box-shadow: 0 0 10px #44FF44;
-            animation: pulse 2s infinite;
+            vertical-align: middle;
+            margin-right: 10px;
         }
 
-        @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .footer {
-            margin-top: 30px;
-            font-size: 12px;
-            color: #666;
+            margin-top: 40px;
+            font-size: 11px;
+            color: #444;
+            letter-spacing: 0.5px;
         }
     </style>
 </head>
@@ -126,18 +175,96 @@
             <div class="logo-row">
                 <img src="/assets/miele.svg" alt="Miele">
                 <div class="logo-divider"></div>
-                <img src="/assets/matter.svg" alt="Matter" class="matter-logo">
+                <img src="/assets/matter.svg" alt="Matter">
             </div>
 
-            <h1>Bereit für Matter</h1>
-            <p>Verknüpfen Sie Ihren Miele Account, um Ihren Geschirrspüler und weitere Geräte nahtlos über Matter zu steuern.</p>
-            
-            <a href="/login" class="btn">Miele Account verbinden</a>
+            <div id="loading">
+                <div class="loading-spinner"></div>
+                <span>Initialisiere Bridge...</span>
+            </div>
 
-            <div class="footer">
-                <span class="status-dot"></span> Bridge Online | PoC v0.3
+            <div id="onboarding" class="hidden">
+                <h1>Willkommen</h1>
+                <p class="subtitle">Verbinden Sie Ihren Account, um zu starten.</p>
+                <a href="/login" class="btn">Miele Account verbinden</a>
+            </div>
+
+            <div id="dashboard" class="hidden">
+                <h1>Bridge Aktiv</h1>
+                <p class="subtitle">System läuft einwandfrei.</p>
+                
+                <div class="status-box">
+                    <div class="status-item">
+                        <div class="status-label">Miele Cloud</div>
+                        <div id="miele-status" class="status-value">Prüfen...</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">Matter Stack</div>
+                        <div id="matter-status" class="status-value">Prüfen...</div>
+                    </div>
+                </div>
+
+                <button onclick="confirmReset()" class="btn btn-outline">Bridge zurücksetzen</button>
+            </div>
+
+            <div class="footer" id="version-info">
+                MIELE MATTER BRIDGE | ESP32-S3
             </div>
         </div>
     </div>
+
+    <script>
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                document.getElementById('loading').classList.add('hidden');
+                
+                if (!status.miele_connected) {
+                    document.getElementById('onboarding').classList.remove('hidden');
+                    document.getElementById('dashboard').classList.add('hidden');
+                } else {
+                    document.getElementById('onboarding').classList.add('hidden');
+                    document.getElementById('dashboard').classList.remove('hidden');
+                    
+                    const mStatus = document.getElementById('miele-status');
+                    mStatus.innerText = status.miele_connected ? 'Verbunden' : 'Getrennt';
+                    mStatus.className = 'status-value ' + (status.miele_connected ? 'connected' : 'disconnected');
+                    
+                    const matStatus = document.getElementById('matter-status');
+                    matStatus.innerText = status.matter_commissioned ? 'Gepairt' : 'Bereit';
+                    matStatus.className = 'status-value ' + (status.matter_commissioned ? 'connected' : 'disconnected');
+                }
+                
+                document.getElementById('version-info').innerText = `MIELE MATTER BRIDGE | v${status.version} | ESP32-S3`;
+                
+            } catch (e) {
+                console.error("Status-Update fehlgeschlagen", e);
+            }
+        }
+
+        async function confirmReset() {
+            if (confirm("Möchten Sie die Bridge wirklich auf Werkseinstellungen zurücksetzen?\nAlle Pairing-Daten gehen verloren.")) {
+                try {
+                    const btn = document.querySelector('.btn-outline');
+                    btn.innerText = "Setze zurück...";
+                    btn.disabled = true;
+                    
+                    await fetch('/api/reset', { method: 'POST' });
+                    
+                    alert("Bridge wird neu gestartet...");
+                    setTimeout(() => window.location.reload(), 5000);
+                } catch (e) {
+                    alert("Reset fehlgeschlagen.");
+                }
+            }
+        }
+
+        // Initialer Check
+        updateStatus();
+        // Alle 10 Sekunden aktualisieren
+        setInterval(updateStatus, 10000);
+    </script>
 </body>
 </html>

@@ -11,8 +11,9 @@ set(MATTER_SDK_PATH ${ESP_MATTER_PATH}/connectedhomeip/connectedhomeip)
 # Force ESP32-S3 DevKit configuration
 set(ENV{ESP_MATTER_DEVICE_PATH} ${ESP_MATTER_PATH}/device_hal/device/esp32s3_devkit_c)
 
-set(PROJECT_VER "0.1")
-set(PROJECT_VER_NUMBER 1)
+set(PROJECT_VER "2.3.0")
+set(PROJECT_VER_NUMBER 230)
+set(PROJECT_CODENAME "Transparent Zen")
 
 # 2. Boilerplate Includes
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
@@ -32,5 +33,5 @@ set(EXTRA_COMPONENT_DIRS
 project(miele_matter_bridge)
 
 # 4. Matter-specific Compiler Flags
-idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17;-Os;-DCHIP_HAVE_CONFIG_H;-Wno-overloaded-virtual" APPEND)
-idf_build_set_property(C_COMPILE_OPTIONS "-Os" APPEND)
+idf_build_set_property(CXX_COMPILE_OPTIONS "-std=gnu++17;-Os;-DCHIP_HAVE_CONFIG_H;-Wno-overloaded-virtual;-Wno-error=unused-result" APPEND)
+idf_build_set_property(C_COMPILE_OPTIONS "-Os;-Wno-error=unused-result" APPEND)
