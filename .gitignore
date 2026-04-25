@@ -38,6 +38,7 @@ credentials.json
 credentials.txt
 docs/miele3rdpartyapi/credentials.txt
 nvs_batch.csv
+sdkconfig.defaults.local
 
 # Logs
 *.log

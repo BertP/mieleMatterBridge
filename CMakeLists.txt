@@ -15,6 +15,9 @@ set(PROJECT_VER "2.3.7")
 set(PROJECT_VER_NUMBER 237)
 set(PROJECT_CODENAME "Zen Harmony Pro")
 
+# Support for local private configs (e.g. Secrets)
+set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.defaults.local")
+
 # 2. Boilerplate Includes
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 include(${ESP_MATTER_PATH}/examples/common/cmake_common/components_include.cmake)

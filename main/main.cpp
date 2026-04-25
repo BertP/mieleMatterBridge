@@ -32,9 +32,9 @@
 #include <platform/DeviceInstanceInfoProvider.h>
 #include "qrcodegen.hpp"
 
-static const char *TAG = "MIELE_BRIDGE";
-#define APP_VERSION "2.3.9"
-#define APP_CODENAME "Zen Harmony Pro"
+static const char *TAG = "BERT_BRIDGE";
+#define APP_VERSION "1.0.0-berts-schmiede"
+#define APP_CODENAME "Bert Schmiede Pro"
 
 enum class SystemStatus {
     PAIRING,
@@ -73,11 +73,11 @@ public:
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetHardwareVersionString(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "v1.0");
+        chip::Platform::CopyString(buf, bufSize, "BertsHardwareSchmiede v1.0");
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetSerialNumber(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "MIELE-MATTER-001");
+        chip::Platform::CopyString(buf, bufSize, "BERTS-SCHMIEDE-001");
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetManufacturingDate(uint16_t & year, uint8_t & month, uint8_t & day) override {
@@ -89,15 +89,15 @@ public:
         return chip::CopySpanToMutableSpan(chip::ByteSpan(uniqueId), uniqueIdSpan);
     }
     CHIP_ERROR GetPartNumber(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "G7104-SCU");
+        chip::Platform::CopyString(buf, bufSize, "BERT-001");
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetProductURL(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "https://www.miele.de");
+        chip::Platform::CopyString(buf, bufSize, "https://github.com/BertP");
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetProductLabel(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "Miele Dishwasher Bridge");
+        chip::Platform::CopyString(buf, bufSize, "BertsHardwareSchmiede");
         return CHIP_NO_ERROR;
     }
 };
@@ -189,8 +189,8 @@ static void refresh_display() {
 
 static void draw_success_screen() {
     ssd1306_clear(&oled_dev);
-    char header[32];
-    snprintf(header, sizeof(header), "MIELE BRIDGE %s", APP_VERSION);
+    char header[48];
+    snprintf(header, sizeof(header), "BERT BRIDGE %s", APP_VERSION);
     ssd1306_draw_string(&oled_dev, (128 - strlen(header)*8)/2, 0, header);
     
     // Draw Checkmark in center (32x32 is 4 pages)
@@ -254,8 +254,8 @@ static void draw_qr_code() {
     // 4. Render to OLED (centered, 2x2 scaling if possible)
     // Clear screen first
     ssd1306_clear(&oled_dev);
-    char header[20];
-    snprintf(header, sizeof(header), "PAIRING %s", APP_VERSION);
+    char header[48];
+    snprintf(header, sizeof(header), "BERT PAIR %s", APP_VERSION);
     ssd1306_draw_string(&oled_dev, 0, 0, header);
     
     // Calculate scaling and offsets
@@ -544,8 +544,8 @@ static void miele_sync_task(void *pvParameters) {
         if (current_commissioned && !was_commissioned) {
             ESP_LOGI(TAG, "Pairing abgeschlossen. Aktualisiere OLED...");
             ssd1306_clear(&oled_dev);
-            char header[20];
-            snprintf(header, sizeof(header), "BRIDGE ONLINE %s", APP_VERSION);
+            char header[48];
+            snprintf(header, sizeof(header), "BERT ONLINE %s", APP_VERSION);
             ssd1306_draw_string(&oled_dev, 0, 0, header);
             
             esp_netif_ip_info_t ip_info;
@@ -689,8 +689,8 @@ extern "C" void app_main()
 
     ssd1306_init(&oled_dev, I2C_NUM_0, 0x3C);
     ssd1306_clear(&oled_dev);
-    char boot_header[20];
-    snprintf(boot_header, sizeof(boot_header), "MIELE %s", APP_VERSION);
+    char boot_header[48];
+    snprintf(boot_header, sizeof(boot_header), "BERT %s", APP_VERSION);
     ssd1306_draw_string(&oled_dev, 0, 0, boot_header);
     ssd1306_draw_string(&oled_dev, 0, 2, "BOOTING...");
 
@@ -752,18 +752,18 @@ extern "C" void app_main()
     } else {
         esp_matter::console::init(); 
         
-        // FORCE Miele Identity in Basic Information Cluster (Endpoint 0)
+        // FORCE Berts Identity in Basic Information Cluster (Endpoint 0)
         // We do this AFTER start to ensure the clusters are fully ready
         esp_matter_attr_val_t val = esp_matter_uint16(0xFFF1);
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::VendorID::Id, &val);
 
-        val = esp_matter_uint16(0x8001);
+        val = esp_matter_uint16(0xBE27);
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::ProductID::Id, &val);
 
-        val = esp_matter_char_str((char*)"Miele & Cie. KG", strlen("Miele & Cie. KG"));
+        val = esp_matter_char_str((char*)"BertsMatterSchmiede", strlen("BertsMatterSchmiede"));
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::VendorName::Id, &val);
         
-        val = esp_matter_char_str((char*)"Miele Matter Bridge", strlen("Miele Matter Bridge"));
+        val = esp_matter_char_str((char*)"BertsHardwareSchmiede", strlen("BertsHardwareSchmiede"));
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::ProductName::Id, &val);
 
         val = esp_matter_char_str((char*)APP_VERSION, strlen(APP_VERSION));
