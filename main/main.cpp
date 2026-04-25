@@ -228,8 +228,8 @@ static void draw_qr_code() {
         (void)instance_info_provider->GetProductId(pid);
     } else {
         ESP_LOGW(TAG, "DeviceInstanceInfoProvider not ready, using defaults");
-        vid = 0x120E;
-        pid = 0x0001;
+        vid = 0xFFF1;
+        pid = 0x8001;
     }
     
     // 2. Generate Setup Payload String
@@ -754,10 +754,10 @@ extern "C" void app_main()
         
         // FORCE Miele Identity in Basic Information Cluster (Endpoint 0)
         // We do this AFTER start to ensure the clusters are fully ready
-        esp_matter_attr_val_t val = esp_matter_uint16(0x120E);
+        esp_matter_attr_val_t val = esp_matter_uint16(0xFFF1);
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::VendorID::Id, &val);
 
-        val = esp_matter_uint16(0x0001);
+        val = esp_matter_uint16(0x8001);
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::ProductID::Id, &val);
 
         val = esp_matter_char_str((char*)"Miele & Cie. KG", strlen("Miele & Cie. KG"));
