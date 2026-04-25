@@ -4,10 +4,11 @@
 
 This file defines the immutable technical constraints, toolchains, and verified workflows for the Miele Matter Bridge project.
 
-## 1. System Environment (Hybrid Setup)
+## 1. System Environment (WSL2 Native)
 - **Host OS:** Windows 11
-- **Build/Flash OS:** WSL2 (Ubuntu 22.04)
-- **Shell:** PowerShell (Host) / Bash (WSL2)
+- **Build/Flash OS:** WSL2 (Ubuntu 22.04) - Native ext4 Filesystem
+- **Project Path:** `/home/bert/projects/mieleMatterBridge`
+- **Shell:** Bash (WSL2) / PowerShell (Host for usbipd)
 - **ESP-IDF Version:** v5.4.0 (Path: `/home/bert/esp/esp-idf`)
 
 ## 2. Hardware Specification
@@ -61,11 +62,16 @@ If a requirement is missing or a technical debt is spotted, point it out.
 - **Team-Responsibility:** Antigravity (AI) ist für das Auslösen der Build- und Flash-Vorgänge über das Terminal verantwortlich. Der Lead-Developer (Bert) stellt die physische Bereitschaft der Hardware sicher.
 
 ## 5. Key Configurations
-- **Aktueller Status:** [DEPLOYING] 🚀 (v2.2.0 "Zen Vision")
+## 🛠️ Standard Operating Procedures (SOP)
+- **Live-Logging:** Jeder Build- oder Flash-Vorgang **muss** mit Live-Logging durchgeführt werden. Der Output wird standardmäßig nach `logs/esp32_live.log` umgeleitet. Der Status wird regelmäßig via `tail` an den User gemeldet.
+- **Erase-Flash:** Bei Änderungen an VID/PID oder der Matter-Identität muss zwingend ein `idf.py erase-flash` vorangestellt werden.
+
+## 📊 Aktueller Projektstatus (v2.3.7 "Zen Harmony Pro")
+- **Aktueller Status:** [DEPLOYING] 🚀 (v2.3.7 "Zen Harmony Pro")
 - **Bootloop Teil 1 (LoadProhibited):** BEHOBEN. Ursache war der Zugriff auf Attribute vor `esp_matter::start()`.
 - **Bootloop Teil 2 (Abort in QR-Code):** BEHOBEN (Fix im Build). Ursache war der Zugriff auf Matter-Provider vor Stack-Start.
 - **mDNS (3000008):** Nächstes Ziel nach stabilem Boot.
-- **Deployment:** v2.2.0 "Zen Vision" wird gerade geflasht.
+- **Deployment:** v2.3.7 "Zen Harmony Pro" wird gerade geflasht.
 - **Miele API Credentials:** Managed via Kconfig (stored in local `sdkconfig`).
 - **WLAN Stabilität:** `esp_wifi_set_ps(WIFI_PS_NONE)` is mandatory for Matter commissioning.
 - **Partitions:** Standard Matter partitions (8MB flash layout).
@@ -74,6 +80,7 @@ If a requirement is missing or a technical debt is spotted, point it out.
 - [x] **2026-04-21:** Smoke Test successful (Blinky on GPIO 48).
 - [x] **2026-04-22:** Phase 2.1 - **v2.1.0 "Dynamic Heartbeat"** (QR, Kconfig, LED Heartbeat).
 - [x] **2026-04-23:** Phase 2.2 - **v2.2.0 "Zen Vision"** (Premium OLED Dashboard, Status Icons).
+- [x] **2026-04-24:** Phase 2.3 - **v2.3.7 "Zen Harmony Pro"** (Synchronized Miele Identity, Dynamic Versioning).
 
 ## 7. Versioning Policy
 - **Semantic Versioning (SemVer):** MAJOR.MINOR.PATCH.
@@ -86,4 +93,4 @@ If a requirement is missing or a technical debt is spotted, point it out.
 
 
 ---
-*Last Updated: 2026-04-22*
+*Last Updated: 2026-04-24*

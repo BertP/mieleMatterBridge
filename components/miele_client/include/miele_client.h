@@ -60,5 +60,10 @@ esp_err_t get_appliance_status(const std::string &device_id, appliance_status_t 
  */
 esp_err_t start_sse_listener();
 
+/**
+ * @brief Löscht die Sitzung (Tokens) lokal und im NVS
+ */
+esp_err_t logout();
+
 } // namespace api
 } // namespace miele

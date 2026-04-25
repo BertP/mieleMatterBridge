@@ -42,3 +42,7 @@ nvs_batch.csv
 # Logs
 *.log
 build_log_*
+
+# Templates & Backups
+zen_starter_kit/
+zen_starter_kit.tar.gz

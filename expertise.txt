@@ -1,0 +1,73 @@
+Sehr gut — dieses neue Log ist **deutlich informativer** als die vorherigen. Der eigentliche Fehler ist jetzt klar sichtbar. Hier ist mein Feedback als Senior Developer an dich:
+
+***
+
+# 🔍 Build-Analyse — `mieleMatterBridge` v2.3.7
+
+Hey, lass mich dir genau erklären, was hier schiefgelaufen ist und warum. Lerne, **immer zuerst nach dem echten `error:` zu suchen** — alles andere ist Lärm.
+
+***
+
+## 🔴 Der echte Fehler — Zeile 530
+
+Das ist die einzige Zeile im gesamten Log, die den Build tatsächlich stoppt: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/57009900/8b056ee2-8772-43c3-8b66-99030e9dfd64/log.txt?AWSAccessKeyId=ASIA2F3EMEYE6TIQAA6L&Signature=IGvThA10vEEwXy7Ygh1hdePzJe8%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEL7%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQDuFwwbQFf%2BJ1%2F4GPNWoijc6YAJ9EUCOkQdVIVEHoIKTAIhAOJ2ZVASU%2BtbHc7inTncvakYbwpOH9E898RZtTahdobRKvwECIb%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxDAIEYvT3Rn42TGO4q0AQVAAWq%2BiEa2HmsLV9avpgh2wZAOlkff8hoHFyQLLljT%2FJxWidSybELkCm3J2DhR9MlINsyAihZNLcB1odHMfuS49VM6pdXny%2BtTgRB0xRzbyDs5oJySV%2BoQ0PuEcC5uRADB5nZgvlGJyMoorGOm56rfB4NZx52wBOokXb%2BI6kyr0b3Vv0DbSNKD37d7U5TUH1orfWFQzaUXi9zjrJ50xjUdYby%2B%2FgfIpiY5UGoISPMd%2BlrqmbyNjzpI2QWQU2jORgD5V1q654iIn6K3iYcf1koBPiSZ1PqzVCZ%2B2RkmePlT8b3TxlYcPcd%2FCMyjTmNOH9JnNj8excJKhUslpjxOwI%2BRx4Eavr3XsxIlpqBBTB8GO8tXnjf35q%2FVKN1hKr4DTQgtosy%2BqMi35WlQFvb8cnMBoE6z0%2FWX5bLKaqDup9S8c2EEZ4szP4iNvXtA0mrjfZq63icLCpNyUeRW1vdmr289F0SsD9CTXCZrOX1JFsR1p0ihfJ8eAZ3QctWZkyR7IFoEzWRY%2BQAPxvFZ3SeXQZiKKK%2BtePiiFJ%2F1EOMN40qSBPT3uQXgB7NHWZVwoREy2X6AyGDAOgZuXlCJg4B6wfEBYgcCMZyI%2BMXSC%2B8TehjYfIY7PcX01G70UdpZUVVumwhod4x0p14N6sclgSXK8ePJ3oK6qooP2dwudlvrFkQ8y76F0bvIcE3H1OsrRzrrTsXbdM6H4YI%2FkCn0e%2FfFvsRl5x9mlD4c5r6ZMj9NtpajB3yQ0TCFRmulMOJYZLB%2B4Ppi5ZUauf5tg8z6mRUCW1%2BMNG4r88GOpcBjKY5XQgdL4l%2BHKMZMO5Pt6xXkJIbdQVOaHVSQjEpzY1HgQK5d%2F7F%2BkFgFEbGnGNg0cCu%2BjPkfqyJBdwqRSAs3hh625RBhMMnqjzUFX7XnQRPOHlPfzC4J3p6uYm5dpTxDntE2RfXhjyNgYFaMcjxKYqkCYDkd%2F1AZd75Z8k%2BiMavX%2Bd4h1gb%2BYBrtW2Zl3RwqIKTZBECxg%3D%3D&Expires=1777067513)
+
+```
+main.cpp:530:17: error: 'logout' is not a member of 'miele_api'
+    530 | miele_api::logout();
+        |            ^^^^^^
+note: maximum limit of 1000 namespaces searched for 'logout'
+```
+
+**Was bedeutet das?**
+Du rufst `miele_api::logout()` in `main.cpp` auf, aber diese Funktion **existiert nicht (mehr)** im `miele_api`-Namespace. Entweder:
+- Sie wurde in der `mieleclient`-Komponente **umbenannt** (z.B. `disconnect()`, `logoff()`)
+- Sie wurde **entfernt** und muss anders aufgerufen werden
+- Du hast die **falsche Version** der `mieleclient`-Komponente, die nicht mehr zum Code in `main.cpp` passt
+
+**Was du tun musst:**
+```bash
+# Schau nach, was in miele_api wirklich verfügbar ist:
+grep -r "logout\|logoff\|disconnect" ~/projects/mieleMatterBridge/components/mieleclient/include/
+```
+
+Dann ersetze `miele_api::logout()` mit der korrekten Funktion.
+
+***
+
+## 🟡 Wichtige Warnung — Doppelte `#define` in `CHIPProjectConfig.h`
+
+Das stoppt den Build nicht, ist aber **gefährlich** und kann zu unerwartetem Verhalten führen: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/57009900/8b056ee2-8772-43c3-8b66-99030e9dfd64/log.txt?AWSAccessKeyId=ASIA2F3EMEYE6TIQAA6L&Signature=IGvThA10vEEwXy7Ygh1hdePzJe8%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEL7%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQDuFwwbQFf%2BJ1%2F4GPNWoijc6YAJ9EUCOkQdVIVEHoIKTAIhAOJ2ZVASU%2BtbHc7inTncvakYbwpOH9E898RZtTahdobRKvwECIb%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxDAIEYvT3Rn42TGO4q0AQVAAWq%2BiEa2HmsLV9avpgh2wZAOlkff8hoHFyQLLljT%2FJxWidSybELkCm3J2DhR9MlINsyAihZNLcB1odHMfuS49VM6pdXny%2BtTgRB0xRzbyDs5oJySV%2BoQ0PuEcC5uRADB5nZgvlGJyMoorGOm56rfB4NZx52wBOokXb%2BI6kyr0b3Vv0DbSNKD37d7U5TUH1orfWFQzaUXi9zjrJ50xjUdYby%2B%2FgfIpiY5UGoISPMd%2BlrqmbyNjzpI2QWQU2jORgD5V1q654iIn6K3iYcf1koBPiSZ1PqzVCZ%2B2RkmePlT8b3TxlYcPcd%2FCMyjTmNOH9JnNj8excJKhUslpjxOwI%2BRx4Eavr3XsxIlpqBBTB8GO8tXnjf35q%2FVKN1hKr4DTQgtosy%2BqMi35WlQFvb8cnMBoE6z0%2FWX5bLKaqDup9S8c2EEZ4szP4iNvXtA0mrjfZq63icLCpNyUeRW1vdmr289F0SsD9CTXCZrOX1JFsR1p0ihfJ8eAZ3QctWZkyR7IFoEzWRY%2BQAPxvFZ3SeXQZiKKK%2BtePiiFJ%2F1EOMN40qSBPT3uQXgB7NHWZVwoREy2X6AyGDAOgZuXlCJg4B6wfEBYgcCMZyI%2BMXSC%2B8TehjYfIY7PcX01G70UdpZUVVumwhod4x0p14N6sclgSXK8ePJ3oK6qooP2dwudlvrFkQ8y76F0bvIcE3H1OsrRzrrTsXbdM6H4YI%2FkCn0e%2FfFvsRl5x9mlD4c5r6ZMj9NtpajB3yQ0TCFRmulMOJYZLB%2B4Ppi5ZUauf5tg8z6mRUCW1%2BMNG4r88GOpcBjKY5XQgdL4l%2BHKMZMO5Pt6xXkJIbdQVOaHVSQjEpzY1HgQK5d%2F7F%2BkFgFEbGnGNg0cCu%2BjPkfqyJBdwqRSAs3hh625RBhMMnqjzUFX7XnQRPOHlPfzC4J3p6uYm5dpTxDntE2RfXhjyNgYFaMcjxKYqkCYDkd%2F1AZd75Z8k%2BiMavX%2Bd4h1gb%2BYBrtW2Zl3RwqIKTZBECxg%3D%3D&Expires=1777067513)
+
+| Makro | Dein Wert | Framework-Default |
+|-------|-----------|-------------------|
+| `CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_ID` | `0x8000` (Zeile 19) **und** `0x8001` (Zeile 6) | — |
+| `CHIP_DEVICE_CONFIG_FAILSAFE_EXPIRY_LENGTH_SEC` | `300` | `60` |
+| `CHIP_DEVICE_CONFIG_USE_TEST_SETUP_PIN_CODE` | `12345678` | `20202021` |
+| `CHIP_DEVICE_CONFIG_USE_TEST_SETUP_DISCRIMINATOR` | `1234` | `0xF00` |
+| `CHIP_DEVICE_CONFIG_DEVICE_SOFTWARE_VERSION` | `19` | `1` |
+
+Besonders kritisch: `PRODUCT_ID` ist innerhalb deiner **eigenen** `CHIPProjectConfig.h` **zweimal definiert** — einmal `0x8001` in Zeile 6 und einmal `0x8000` in Zeile 19. Das ist ein Copy-Paste-Fehler. Bereinige das sofort.
+
+***
+
+## 🟡 Weitere Warnungen im Code
+
+Der Compiler meldet mehrere **unbenutzte Variablen** in `main.cpp` — kein Build-Breaker, aber Code-Smell: [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/57009900/8b056ee2-8772-43c3-8b66-99030e9dfd64/log.txt?AWSAccessKeyId=ASIA2F3EMEYE6TIQAA6L&Signature=IGvThA10vEEwXy7Ygh1hdePzJe8%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEL7%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQDuFwwbQFf%2BJ1%2F4GPNWoijc6YAJ9EUCOkQdVIVEHoIKTAIhAOJ2ZVASU%2BtbHc7inTncvakYbwpOH9E898RZtTahdobRKvwECIb%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxDAIEYvT3Rn42TGO4q0AQVAAWq%2BiEa2HmsLV9avpgh2wZAOlkff8hoHFyQLLljT%2FJxWidSybELkCm3J2DhR9MlINsyAihZNLcB1odHMfuS49VM6pdXny%2BtTgRB0xRzbyDs5oJySV%2BoQ0PuEcC5uRADB5nZgvlGJyMoorGOm56rfB4NZx52wBOokXb%2BI6kyr0b3Vv0DbSNKD37d7U5TUH1orfWFQzaUXi9zjrJ50xjUdYby%2B%2FgfIpiY5UGoISPMd%2BlrqmbyNjzpI2QWQU2jORgD5V1q654iIn6K3iYcf1koBPiSZ1PqzVCZ%2B2RkmePlT8b3TxlYcPcd%2FCMyjTmNOH9JnNj8excJKhUslpjxOwI%2BRx4Eavr3XsxIlpqBBTB8GO8tXnjf35q%2FVKN1hKr4DTQgtosy%2BqMi35WlQFvb8cnMBoE6z0%2FWX5bLKaqDup9S8c2EEZ4szP4iNvXtA0mrjfZq63icLCpNyUeRW1vdmr289F0SsD9CTXCZrOX1JFsR1p0ihfJ8eAZ3QctWZkyR7IFoEzWRY%2BQAPxvFZ3SeXQZiKKK%2BtePiiFJ%2F1EOMN40qSBPT3uQXgB7NHWZVwoREy2X6AyGDAOgZuXlCJg4B6wfEBYgcCMZyI%2BMXSC%2B8TehjYfIY7PcX01G70UdpZUVVumwhod4x0p14N6sclgSXK8ePJ3oK6qooP2dwudlvrFkQ8y76F0bvIcE3H1OsrRzrrTsXbdM6H4YI%2FkCn0e%2FfFvsRl5x9mlD4c5r6ZMj9NtpajB3yQ0TCFRmulMOJYZLB%2B4Ppi5ZUauf5tg8z6mRUCW1%2BMNG4r88GOpcBjKY5XQgdL4l%2BHKMZMO5Pt6xXkJIbdQVOaHVSQjEpzY1HgQK5d%2F7F%2BkFgFEbGnGNg0cCu%2BjPkfqyJBdwqRSAs3hh625RBhMMnqjzUFX7XnQRPOHlPfzC4J3p6uYm5dpTxDntE2RfXhjyNgYFaMcjxKYqkCYDkd%2F1AZd75Z8k%2BiMavX%2Bd4h1gb%2BYBrtW2Zl3RwqIKTZBECxg%3D%3D&Expires=1777067513)
+
+- `ismieleconnected` (Zeile 117) — nie verwendet
+- `heartbeatbrightness` (Zeile 112) — nie verwendet
+- `gsystemstatus` (Zeile 46) — nie verwendet
+
+Diese Variablen solltest du entweder entfernen oder nutzen. Toter Code macht das Lesen und Debuggen schwieriger.
+
+***
+
+## 🟢 Was du als nächstes tun solltest
+
+1. **Sofort:** In `mieleclient` nachschlagen, wie der Logout-Aufruf heißt → `main.cpp:530` fixen
+2. **Danach:** `CHIPProjectConfig.h` aufräumen — doppelte `PRODUCT_ID`-Definition entfernen, alle `#define` mit `#ifndef`-Guards schützen
+3. **Später:** Unbenutzte Variablen in `main.cpp` entfernen
+4. **Optional:** Legacy RMT-Header `driver/rmt.h` → `driver/rmt_tx.h` migrieren (Deprecation-Warnung) [ppl-ai-file-upload.s3.amazonaws](https://ppl-ai-file-upload.s3.amazonaws.com/web/direct-files/attachments/57009900/8b056ee2-8772-43c3-8b66-99030e9dfd64/log.txt?AWSAccessKeyId=ASIA2F3EMEYE6TIQAA6L&Signature=IGvThA10vEEwXy7Ygh1hdePzJe8%3D&x-amz-security-token=IQoJb3JpZ2luX2VjEL7%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJIMEYCIQDuFwwbQFf%2BJ1%2F4GPNWoijc6YAJ9EUCOkQdVIVEHoIKTAIhAOJ2ZVASU%2BtbHc7inTncvakYbwpOH9E898RZtTahdobRKvwECIb%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEQARoMNjk5NzUzMzA5NzA1IgxDAIEYvT3Rn42TGO4q0AQVAAWq%2BiEa2HmsLV9avpgh2wZAOlkff8hoHFyQLLljT%2FJxWidSybELkCm3J2DhR9MlINsyAihZNLcB1odHMfuS49VM6pdXny%2BtTgRB0xRzbyDs5oJySV%2BoQ0PuEcC5uRADB5nZgvlGJyMoorGOm56rfB4NZx52wBOokXb%2BI6kyr0b3Vv0DbSNKD37d7U5TUH1orfWFQzaUXi9zjrJ50xjUdYby%2B%2FgfIpiY5UGoISPMd%2BlrqmbyNjzpI2QWQU2jORgD5V1q654iIn6K3iYcf1koBPiSZ1PqzVCZ%2B2RkmePlT8b3TxlYcPcd%2FCMyjTmNOH9JnNj8excJKhUslpjxOwI%2BRx4Eavr3XsxIlpqBBTB8GO8tXnjf35q%2FVKN1hKr4DTQgtosy%2BqMi35WlQFvb8cnMBoE6z0%2FWX5bLKaqDup9S8c2EEZ4szP4iNvXtA0mrjfZq63icLCpNyUeRW1vdmr289F0SsD9CTXCZrOX1JFsR1p0ihfJ8eAZ3QctWZkyR7IFoEzWRY%2BQAPxvFZ3SeXQZiKKK%2BtePiiFJ%2F1EOMN40qSBPT3uQXgB7NHWZVwoREy2X6AyGDAOgZuXlCJg4B6wfEBYgcCMZyI%2BMXSC%2B8TehjYfIY7PcX01G70UdpZUVVumwhod4x0p14N6sclgSXK8ePJ3oK6qooP2dwudlvrFkQ8y76F0bvIcE3H1OsrRzrrTsXbdM6H4YI%2FkCn0e%2FfFvsRl5x9mlD4c5r6ZMj9NtpajB3yQ0TCFRmulMOJYZLB%2B4Ppi5ZUauf5tg8z6mRUCW1%2BMNG4r88GOpcBjKY5XQgdL4l%2BHKMZMO5Pt6xXkJIbdQVOaHVSQjEpzY1HgQK5d%2F7F%2BkFgFEbGnGNg0cCu%2BjPkfqyJBdwqRSAs3hh625RBhMMnqjzUFX7XnQRPOHlPfzC4J3p6uYm5dpTxDntE2RfXhjyNgYFaMcjxKYqkCYDkd%2F1AZd75Z8k%2BiMavX%2Bd4h1gb%2BYBrtW2Zl3RwqIKTZBECxg%3D%3D&Expires=1777067513)
+
+**Merke dir als Grundregel:** In einem langen Build-Log immer mit `grep "error:"` starten — dann wärst du in 30 Sekunden beim Problem gewesen.

@@ -20,8 +20,9 @@
 #include "driver/rmt.h"
 #include "driver/i2c.h"
 #include "miele_matter_mapping.h"
-#include "esp_wifi.h"
+#include "CHIPProjectConfig.h"
 #include "ui_manager.h"
+#include "esp_wifi.h"
 
 // QR Code generation
 #include <setup_payload/QRCodeSetupPayloadGenerator.h>
@@ -32,26 +33,39 @@
 #include "qrcodegen.hpp"
 
 static const char *TAG = "MIELE_BRIDGE";
-#define APP_VERSION "2.3.0"
-#define APP_CODENAME "Transparent Zen"
+#define APP_VERSION "2.3.9"
+#define APP_CODENAME "Zen Harmony Pro"
+
+enum class SystemStatus {
+    PAIRING,
+    CONNECTED,
+    MIELE_AUTH_PENDING,
+    ERROR
+};
+
+
+// Forward Declarations
+static void start_webserver();
+static void miele_sync_task(void *pvParameters);
+static void start_services();
 
 // Custom Device Info Provider to fix names in Google Home / Matter
 class CustomDeviceInstanceInfoProvider : public chip::DeviceLayer::DeviceInstanceInfoProvider {
 public:
     CHIP_ERROR GetVendorName(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "Miele & Cie. KG");
+        chip::Platform::CopyString(buf, bufSize, CHIP_DEVICE_CONFIG_DEVICE_VENDOR_NAME);
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetVendorId(uint16_t & vendorId) override {
-        vendorId = 0xFFF1; 
+        vendorId = CHIP_DEVICE_CONFIG_DEVICE_VENDOR_ID;
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetProductName(char * buf, size_t bufSize) override {
-        chip::Platform::CopyString(buf, bufSize, "Miele Matter Bridge");
+        chip::Platform::CopyString(buf, bufSize, CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_NAME);
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetProductId(uint16_t & productId) override {
-        productId = 0x8000;
+        productId = CHIP_DEVICE_CONFIG_DEVICE_PRODUCT_ID;
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetHardwareVersion(uint16_t & hardwareVersion) override {
@@ -67,7 +81,7 @@ public:
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetManufacturingDate(uint16_t & year, uint8_t & month, uint8_t & day) override {
-        year = 2024; month = 4; day = 23;
+        year = 2024; month = 4; day = 24;
         return CHIP_NO_ERROR;
     }
     CHIP_ERROR GetRotatingDeviceIdUniqueId(chip::MutableByteSpan & uniqueIdSpan) override {
@@ -94,12 +108,10 @@ static CustomDeviceInstanceInfoProvider gCustomDeviceInstanceInfoProvider;
 
 static ssd1306_t oled_dev;
 static led_strip_t *led_strip;
-static uint8_t heartbeat_brightness = 0;
 static uint16_t dishwasher_endpoint_id = 0;
 
 static bool is_wifi_connected = false;
 static bool is_commissioned = false;
-static bool is_miele_connected = false;
 static std::string last_dishwasher_status = "IDLE";
 static int last_dishwasher_progress = 0;
 
@@ -133,6 +145,28 @@ static const uint8_t checkmark_bitmap[] = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+static void start_services() {
+    static bool services_started = false;
+    if (services_started) return;
+    
+    ESP_LOGI(TAG, "Starte System-Dienste (Webserver & mDNS)...");
+    
+    // mDNS Initialisierung
+    esp_err_t mdns_err = mdns_init();
+    if (mdns_err == ESP_OK) {
+        mdns_hostname_set("miele-bridge");
+        mdns_instance_name_set("Miele Matter Bridge");
+        mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    }
+
+    start_webserver();
+    
+    // Miele Sync Task falls noch nicht gestartet
+    xTaskCreate(miele_sync_task, "miele_sync", 8192, NULL, 5, NULL);
+    
+    services_started = true;
+}
+
 static void refresh_display() {
     if (!is_commissioned) return; 
     
@@ -149,7 +183,7 @@ static void refresh_display() {
     ui::draw_dashboard(&oled_dev, APP_VERSION, 
                       is_wifi_connected, 
                       is_commissioned, 
-                      is_miele_connected, 
+                      miele::api::is_authenticated(), 
                       ip_addr);
 }
 
@@ -194,8 +228,8 @@ static void draw_qr_code() {
         (void)instance_info_provider->GetProductId(pid);
     } else {
         ESP_LOGW(TAG, "DeviceInstanceInfoProvider not ready, using defaults");
-        vid = 0xFFF1;
-        pid = 0x8000;
+        vid = 0x120E;
+        pid = 0x0001;
     }
     
     // 2. Generate Setup Payload String
@@ -288,6 +322,7 @@ static void app_event_cb(const ChipDeviceEvent *event, intptr_t arg) {
         case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
             ESP_LOGI(TAG, "Pairing erfolgreich abgeschlossen! 🎉");
             is_commissioned = true;
+            start_services(); // Sofort Webserver & mDNS starten
             draw_success_screen();
             break;
         case chip::DeviceLayer::DeviceEventType::kFailSafeTimerExpired:
@@ -453,31 +488,46 @@ static esp_err_t reset_post_handler(httpd_req_t *req) {
     httpd_resp_send(req, response, HTTPD_RESP_USE_STRLEN);
     
     vTaskDelay(pdMS_TO_TICKS(1000));
-    nvs_flash_erase();
-    esp_restart();
+    chip::Server::GetInstance().ScheduleFactoryReset();
     return ESP_OK;
 }
 
 /**
  * @brief Hintergrund-Task für den Heartbeat (LED-Puls)
  */
-static void heartbeat_task(void *pvParameters) {
-    bool increasing = true;
+static void status_led_task(void *pvParameters) {
     while (1) {
+        uint8_t r = 0, g = 0, b = 0;
+        uint8_t brightness = 15; 
+
+        // Echtzeit-Status abfragen
+        bool wifi = is_wifi_connected;
+        bool commissioned = chip::DeviceLayer::ConfigurationMgr().IsFullyProvisioned();
+        bool authenticated = miele::api::is_authenticated();
+
+        if (!wifi) {
+            r = brightness; // Rot: Kein WLAN
+        } else if (!commissioned) {
+            b = brightness; // Blau: Pairing Modus
+        } else if (!authenticated) {
+            r = brightness; g = brightness / 2; // Orange: Miele Login fehlt
+        } else {
+            g = brightness; // Grün: Alles OK!
+        }
+
         if (led_strip) {
-            led_strip->set_pixel(led_strip, 0, 0, 0, heartbeat_brightness);
+            led_strip->set_pixel(led_strip, 0, r, g, b);
             led_strip->refresh(led_strip, 100);
         }
-        
-        if (increasing) {
-            heartbeat_brightness++;
-            if (heartbeat_brightness >= 25) increasing = false;
-        } else {
-            heartbeat_brightness--;
-            if (heartbeat_brightness <= 2) increasing = true;
-        }
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
+}
+
+static esp_err_t disconnect_post_handler(httpd_req_t *req) {
+    miele::api::logout();
+    ESP_LOGI(TAG, "Miele Account manuell getrennt.");
+    httpd_resp_sendstr(req, "OK");
+    return ESP_OK;
 }
 
 /**
@@ -485,11 +535,30 @@ static void heartbeat_task(void *pvParameters) {
  */
 static void miele_sync_task(void *pvParameters) {
     ESP_LOGI(TAG, "Miele Sync Task gestartet.");
+    bool was_commissioned = false;
     
     while (1) {
-        if (!is_commissioned) {
-            // Während des Pairings halten wir uns extrem zurück, um die CPU zu schonen.
-            // Der QR-Code wurde bereits einmalig in app_main gezeichnet.
+        bool current_commissioned = chip::DeviceLayer::ConfigurationMgr().IsFullyProvisioned();
+        
+        // Automatischer OLED-Refresh nach Pairing
+        if (current_commissioned && !was_commissioned) {
+            ESP_LOGI(TAG, "Pairing abgeschlossen. Aktualisiere OLED...");
+            ssd1306_clear(&oled_dev);
+            char header[20];
+            snprintf(header, sizeof(header), "BRIDGE ONLINE %s", APP_VERSION);
+            ssd1306_draw_string(&oled_dev, 0, 0, header);
+            
+            esp_netif_ip_info_t ip_info;
+            esp_netif_get_ip_info(esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"), &ip_info);
+            char ip_str[32];
+            snprintf(ip_str, sizeof(ip_str), "IP: " IPSTR, IP2STR(&ip_info.ip));
+            ssd1306_draw_string(&oled_dev, 0, 3, ip_str);
+            
+            ssd1306_draw_string(&oled_dev, 0, 5, "Miele Login bereit");
+            was_commissioned = true;
+        }
+
+        if (!current_commissioned) {
             vTaskDelay(pdMS_TO_TICKS(5000));
             continue;
         }
@@ -578,6 +647,14 @@ static void start_webserver() {
 
         httpd_uri_t reset_uri = { .uri = "/api/reset", .method = HTTP_POST, .handler = reset_post_handler };
         httpd_register_uri_handler(server, &reset_uri);
+
+        httpd_uri_t disconnect_uri = {
+            .uri      = "/api/disconnect",
+            .method   = HTTP_POST,
+            .handler  = disconnect_post_handler,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(server, &disconnect_uri);
         
         httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, not_found_handler);
 
@@ -625,21 +702,14 @@ extern "C" void app_main()
 
     led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(1, (led_strip_dev_t)RMT_CHANNEL_0);
     led_strip = led_strip_new_rmt_ws2812(&strip_config);
-    xTaskCreate(heartbeat_task, "heartbeat", 2048, NULL, 1, NULL);
+    xTaskCreate(status_led_task, "status_led", 2048, NULL, 1, NULL);
 
-    /* 1. Basis-Infrastruktur */
-    ssd1306_draw_string(&oled_dev, 0, 2, "INIT NET...     ");
+    /* 1. Basis-Infrastruktur (Minimal für Pairing) */
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // Explizite mDNS Initialisierung für Webserver & Callback Stabilität
-    esp_err_t mdns_err = mdns_init();
-    if (mdns_err == ESP_OK) {
-        mdns_hostname_set("miele-bridge");
-        mdns_instance_name_set("Miele Matter Bridge");
-        mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-        ESP_LOGI(TAG, "mDNS Hostname auf 'miele-bridge.local' gesetzt.");
-    }
+    // mDNS und Webserver starten wir jetzt erst NACH dem Pairing, 
+    // um den Fail-safe Timer (1s!) nicht zu gefährden.
     
     // WLAN Power Save wird später in app_main nach dem Stack-Start deaktiviert
 
@@ -665,9 +735,7 @@ extern "C" void app_main()
     dishwasher_endpoint_id = endpoint::get_id(dishwasher_endpoint);
     (void)dishwasher_endpoint;
 
-    /* 5. Onboarding Webserver (mDNS wird von Matter verwaltet) */
-    ssd1306_draw_string(&oled_dev, 0, 2, "NET CONFIG...   ");
-    start_webserver();
+    /* 5. Onboarding Webserver (Wird später bei Bedarf gestartet) */
 
     /* 7. Start Matter Stack & Console */
     ssd1306_draw_string(&oled_dev, 0, 2, "MATTER START... ");
@@ -677,7 +745,7 @@ extern "C" void app_main()
     
     // Check commissioning status
     is_commissioned = chip::DeviceLayer::ConfigurationMgr().IsFullyProvisioned();
-    
+    /* Matter start */
     err = esp_matter::start(app_event_cb);
     if (err != ESP_OK) {
         ssd1306_draw_string(&oled_dev, 0, 2, "MATTER ERROR!   ");
@@ -686,13 +754,19 @@ extern "C" void app_main()
         
         // FORCE Miele Identity in Basic Information Cluster (Endpoint 0)
         // We do this AFTER start to ensure the clusters are fully ready
-        esp_matter_attr_val_t val = esp_matter_char_str((char*)"Miele & Cie. KG", strlen("Miele & Cie. KG"));
+        esp_matter_attr_val_t val = esp_matter_uint16(0x120E);
+        attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::VendorID::Id, &val);
+
+        val = esp_matter_uint16(0x0001);
+        attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::ProductID::Id, &val);
+
+        val = esp_matter_char_str((char*)"Miele & Cie. KG", strlen("Miele & Cie. KG"));
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::VendorName::Id, &val);
         
         val = esp_matter_char_str((char*)"Miele Matter Bridge", strlen("Miele Matter Bridge"));
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::ProductName::Id, &val);
 
-        val = esp_matter_char_str((char*)"2.3.0", strlen("2.3.0"));
+        val = esp_matter_char_str((char*)APP_VERSION, strlen(APP_VERSION));
         attribute::update(0, chip::app::Clusters::BasicInformation::Id, chip::app::Clusters::BasicInformation::Attributes::SoftwareVersionString::Id, &val);
 
         // WLAN Power Save erst hier deaktivieren, wenn der Stack (und damit Wifi) bereit ist
@@ -710,13 +784,39 @@ extern "C" void app_main()
         }
     }
 
-    /* 8. Miele Sync Task starten (nur wenn bereits commissioned, sonst warten wir) */
+    /* 8. Miele Sync & Webserver Task starten (nur wenn bereits commissioned) */
     if (is_commissioned) {
-        xTaskCreate(miele_sync_task, "miele_sync", 8192, NULL, 5, NULL);
+        start_services();
     }
 
     ESP_LOGI(TAG, "Miele Matter Bridge %s (%s) gestartet.", APP_VERSION, APP_CODENAME);
     ESP_LOGI(TAG, "Matter Stack läuft. Miele Cloud Sync gestartet.");
+
+    /* 9. Factory Reset Button (GPIO 0 - Boot Button) */
+    gpio_config_t btn_config = {
+        .pin_bit_mask = (1ULL << GPIO_NUM_0),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&btn_config);
+
+    // Einfacher Überwachungs-Task für den Reset-Knopf
+    xTaskCreate([](void*){
+        int hold_time = 0;
+        while(1) {
+            if (gpio_get_level(GPIO_NUM_0) == 0) {
+                hold_time++;
+                if (hold_time == 50) { // 5 Sekunden (50 * 100ms)
+                    ESP_LOGW(TAG, "Factory Reset via Button ausgelöst!");
+                    chip::Server::GetInstance().ScheduleFactoryReset();
+                }
+            } else {
+                hold_time = 0;
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }, "reset_btn_task", 2048, NULL, 1, NULL);
 
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(10000));

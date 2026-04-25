@@ -11,9 +11,9 @@ set(MATTER_SDK_PATH ${ESP_MATTER_PATH}/connectedhomeip/connectedhomeip)
 # Force ESP32-S3 DevKit configuration
 set(ENV{ESP_MATTER_DEVICE_PATH} ${ESP_MATTER_PATH}/device_hal/device/esp32s3_devkit_c)
 
-set(PROJECT_VER "2.3.0")
-set(PROJECT_VER_NUMBER 230)
-set(PROJECT_CODENAME "Transparent Zen")
+set(PROJECT_VER "2.3.7")
+set(PROJECT_VER_NUMBER 237)
+set(PROJECT_CODENAME "Zen Harmony Pro")
 
 # 2. Boilerplate Includes
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

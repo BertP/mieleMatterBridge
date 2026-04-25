@@ -1,0 +1,3 @@
+# Lokale Miele Secrets (Überleben jeden Build-Wipe)
+CONFIG_MIELE_CLIENT_ID="0df585cb-2ac3-4bb0-8dd7-5fafe9e392fe"
+CONFIG_MIELE_CLIENT_SECRET="60reBsf93NOCiPQiRS1Qxh04skNpoely"

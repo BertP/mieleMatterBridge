@@ -224,5 +224,27 @@ esp_err_t get_appliance_status(const std::string &device_id, appliance_status_t 
     return perform_request(url.c_str(), HTTP_METHOD_GET, NULL, response);
 }
 
+esp_err_t logout() {
+    if (!s_config.access_token.empty()) {
+        ESP_LOGI(TAG, "Sende Logout-Anfrage an Miele Cloud...");
+        std::string response;
+        perform_request("https://api.mcs3.miele.com/thirdparty/logout", HTTP_METHOD_POST, NULL, response);
+    }
+
+    s_config.access_token.clear();
+    s_config.refresh_token.clear();
+    
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("miele_api", NVS_READWRITE, &handle);
+    if (err == ESP_OK) {
+        nvs_erase_key(handle, "access_token");
+        nvs_erase_key(handle, "refresh_token");
+        nvs_commit(handle);
+        nvs_close(handle);
+        ESP_LOGI(TAG, "Lokale Sitzungsdaten gelöscht.");
+    }
+    return err;
+}
+
 } // namespace api
 } // namespace miele

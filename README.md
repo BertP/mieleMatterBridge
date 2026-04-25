@@ -3,7 +3,7 @@
 Connecting Miele Cloud-based appliances to the Matter ecosystem via a dedicated ESP32-S3 bridge.
 
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Version](https://img.shields.io/badge/Version-2.1.0-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.3.8-blue.svg)
 ![Target](https://img.shields.io/badge/Target-ESP32--S3-orange.svg)
 
 ## 📌 Project Overview
@@ -22,23 +22,31 @@ This project implements a bridge between the **Miele 3rd Party API** and the **M
 - **Status LED:** WS2812 RGB (GPIO 48)
 - **Interface:** CH343 USB-to-Serial
 
-## 🚀 Quick Start (Developer Setup)
-This project uses a **hybrid WSL2/Windows** development environment.
+## 🚀 Quick Start (Native WSL2 Setup)
+This project is optimized for a **native WSL2 (ext4)** environment for maximum build performance.
 
 ### Prerequisites
-1. **WSL2 (Ubuntu 22.04)** with ESP-IDF v5.4 and ESP-Matter SDK installed.
-2. **usbipd-win** on Windows for serial passthrough.
+1. **WSL2 (Ubuntu 22.04)**: Files must reside within the Linux filesystem (`~/projects/...`), NOT `/mnt/c/`.
+2. **ESP-IDF v5.4** & **ESP-Matter SDK** installed.
+3. **usbipd-win**: For mapping the ESP32-S3 into WSL2.
+
+### Configuration (Best Practice)
+To protect your Miele API credentials, use a local override file:
+1. Create `sdkconfig.defaults.local`.
+2. Add your secrets:
+   ```ini
+   CONFIG_MIELE_CLIENT_ID="your_id"
+   CONFIG_MIELE_CLIENT_SECRET="your_secret"
+   ```
 
 ### Build & Flash
 ```bash
-# Attach the device (Windows)
-usbipd attach --wsl --busid <BUSID> --auto-attach
-
-# Build (WSL2)
-export ESP_MATTER_PATH=/path/to/esp-matter
+# Export environments
 source $IDF_PATH/export.sh
 source $ESP_MATTER_PATH/export.sh
-idf.py build
+
+# Build with local secrets (The PROFIS-Way)
+idf.py -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.local" build
 
 # Flash & Monitor
 idf.py -p /dev/ttyACM0 flash monitor
